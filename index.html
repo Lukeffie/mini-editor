@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>极简编辑器</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="titlebar">
+        <div class="traffic">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+        </div>
+        <div class="title" id="title">极简编辑器</div>
+        <div class="title-actions">
+          <button id="btn-mode" title="切换模式">浏览模式</button>
+          <span id="edit-actions">
+            <button id="btn-new" title="新建">新建</button>
+            <button id="btn-open" title="打开">打开</button>
+            <button id="btn-save" title="保存">保存</button>
+            <select id="mode-select" title="预览模式">
+              <option value="auto">自动</option>
+              <option value="md">Markdown</option>
+              <option value="html">HTML</option>
+              <option value="txt">文本</option>
+            </select>
+          </span>
+          <button id="btn-settings" title="设置">设置</button>
+        </div>
+      </header>
+
+      <div class="workspace" id="workspace">
+        <!-- 左侧共用面板：编辑模式=文件列表，浏览模式=页签 -->
+        <aside class="sidebar" id="sidebar">
+          <div class="side-edit" id="side-edit">
+            <div class="side-head">
+              <button id="btn-open-dir">打开目录</button>
+              <span id="dir-path" class="dir-path"></span>
+            </div>
+            <ul class="file-list" id="file-list"></ul>
+          </div>
+          <div class="side-browse" id="side-browse" hidden>
+            <div class="side-head">
+              <span>打开的页签</span>
+              <button id="btn-new-tab" title="新页签">＋</button>
+            </div>
+            <ul class="tab-list" id="tab-list"></ul>
+          </div>
+        </aside>
+
+        <!-- 编辑区 -->
+        <main class="split" id="editor-area">
+          <section class="pane editor-pane" id="editor-pane">
+            <div id="editor"></div>
+          </section>
+          <div class="divider" id="divider" title="拖动调整分栏"></div>
+          <section class="pane preview-pane" id="preview-pane">
+            <div id="preview" class="preview markdown-body"></div>
+            <iframe id="preview-frame" class="preview-frame" sandbox hidden></iframe>
+          </section>
+        </main>
+
+        <!-- 浏览区 -->
+        <section class="browser" id="browser-area" hidden>
+          <div class="addressbar">
+            <button id="btn-back" title="后退">‹</button>
+            <button id="btn-reload" title="刷新">↻</button>
+            <input id="url-input" type="text" placeholder="输入网址，如 https://example.com" />
+            <button id="btn-go">前往</button>
+            <button id="btn-console" title="控制台">⌨</button>
+          </div>
+          <div class="browser-body">
+            <iframe id="browser-frame" class="browser-frame"></iframe>
+            <aside class="toolbar" id="toolbar">
+              <div class="toolbar-head">
+                <span>页面元素</span>
+                <button id="btn-toggle-toolbar" title="收起/展开">▾</button>
+              </div>
+              <div class="toolbar-body" id="toolbar-body">
+                <div class="toolbar-actions">
+                  <button id="btn-extract">提取元素</button>
+                  <select id="filter-type" title="按类型筛选">
+                    <option value="all">全部</option>
+                    <option value="image">图片</option>
+                    <option value="link">链接</option>
+                    <option value="script">脚本</option>
+                    <option value="stylesheet">样式表</option>
+                  </select>
+                  <button id="btn-batch-download" disabled>下载选中</button>
+                </div>
+                <ul class="element-list" id="element-list"></ul>
+              </div>
+            </aside>
+          </div>
+          <div class="console" id="console-panel" hidden>
+            <div class="console-head">
+              <span>控制台</span>
+              <button id="btn-clear-console">清空</button>
+            </div>
+            <ul class="console-log" id="console-log"></ul>
+          </div>
+        </section>
+      </div>
+
+      <footer class="statusbar">
+        <span id="status-enc">UTF-8</span>
+        <span id="status-chars">0 字符</span>
+        <span id="status-saved" class="right">就绪</span>
+      </footer>
+    </div>
+
+    <div class="settings-backdrop" id="settings-backdrop" hidden></div>
+    <aside class="settings" id="settings" hidden>
+      <h2>设置</h2>
+      <label class="field">
+        <span>左右分栏比例（编辑 / 预览）</span>
+        <input type="range" id="ratio" min="20" max="80" value="50" />
+        <output id="ratio-out">50% / 50%</output>
+      </label>
+      <label class="field">
+        <span>主题</span>
+        <select id="theme-select">
+          <option value="light">浅色</option>
+          <option value="dark">深色</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>字体大小</span>
+        <input type="range" id="font-size" min="12" max="22" value="14" />
+        <output id="font-size-out">14px</output>
+      </label>
+      <label class="field checkbox">
+        <input type="checkbox" id="auto-save" />
+        <span>自动保存（打开文件后生效）</span>
+      </label>
+      <button id="settings-close">完成</button>
+    </aside>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

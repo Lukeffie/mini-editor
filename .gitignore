@@ -1,0 +1,26 @@
+# ---- Node / 前端构建产物 ----
+node_modules/
+dist/
+.tmp/
+
+# ---- Rust / Tauri 编译产物 ----
+src-tauri/target/
+src-tauri/gen/
+src-tauri/target/release/wix/
+
+# ---- 打包输出的安装包（根目录 msi / 各类安装包）----
+*.msi
+*.exe
+*.nsis
+src-tauri/target/release/bundle/
+
+# ---- 系统/编辑器垃圾 ----
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.log
+
+# ---- 压缩包临时文件 ----
+*.zip
