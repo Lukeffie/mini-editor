@@ -1,6 +1,7 @@
 import { EditorView, basicSetup } from "codemirror";
 import { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
+import { undo, redo } from "@codemirror/commands";
 
 let suppress = false;
 
@@ -34,5 +35,8 @@ export function createEditor(parent, { onChange, initialDoc = "" }) {
       });
       suppress = false;
     },
+    undo: () => undo(view),
+    redo: () => redo(view),
+    refresh: () => view.requestMeasure(),
   };
 }

@@ -1,7 +1,7 @@
 # 极简编辑器 — 本机安装与打包指南
 
-项目已落在：`F:\work\gitee\mini-editor\`
-（左侧 CodeMirror 编辑，右侧 Markdown/HTML/纯文本预览，分栏比例可调并持久化）
+> 本文件专门说明**如何在本机安装环境、构建并打包**本项目。
+> 软件的功能介绍与目录结构请见 [README.md](./README.md)。
 
 ---
 
@@ -39,7 +39,20 @@ https://developer.microsoft.com/zh-cn/microsoft-edge/webview2/
 
 ---
 
-## 二、构建并产出 MSI（一键命令）
+## 二、安装前端依赖与图标（首次需要）
+
+进入项目目录后：
+
+```powershell
+cd <项目目录>
+npm install          # 安装前端依赖
+npm run icons        # 生成 src-tauri/icons/ 下的图标（首次必须）
+```
+
+> `npm run icons` 会向 `src-tauri/icons/` 写入 32x32.png、128x128.png、128x128@2x.png、icon.ico。
+> 也可以用官方工具：`npx tauri icon 你的logo.png`。
+
+## 三、构建并产出 MSI（一键命令）
 
 项目里已内置打包脚本，**只需要跑一条命令**，安装包会自动复制到项目根目录。
 
@@ -49,13 +62,13 @@ https://developer.microsoft.com/zh-cn/microsoft-edge/webview2/
 
 ### 方式 B：在 PowerShell / 命令行里跑同一脚本
 ```powershell
-cd F:\work\gitee\mini-editor
+cd <项目目录>
 .\build.bat
 ```
 
 ### 方式 C：npm 脚本
 ```powershell
-cd F:\work\gitee\mini-editor
+cd <项目目录>
 npm install
 npm run pack
 ```
@@ -65,7 +78,7 @@ npm run pack
 
 ### 产物（已在项目根目录）
 ```
-F:\work\gitee\mini-editor\MiniEditor_1.0.0_x64_en-US.msi
+<项目目录>\MiniEditor_1.0.0_x64_en-US.msi
 ```
 （原始产物仍在 `src-tauri\target\release\bundle\msi\`，根目录为复制件，方便拿取。）
 体积约 **5–15 MB**，双击安装（默认装到当前用户的 `%LOCALAPPDATA%`，无需管理员）。
@@ -77,7 +90,7 @@ F:\work\gitee\mini-editor\MiniEditor_1.0.0_x64_en-US.msi
 
 ---
 
-## 三、调试与开发
+## 四、调试与开发
 
 ```powershell
 npm run tauri dev     # 热重载开发预览
@@ -85,7 +98,7 @@ npm run tauri dev     # 热重载开发预览
 
 ---
 
-## 四、常见坑
+## 五、常见坑
 
 - 报 `找不到 link.exe` / `linker 'link.exe' not found`
   → VS 生成工具没装好，重装并确认勾了「使用 C++ 的桌面开发」。
@@ -99,50 +112,19 @@ npm run tauri dev     # 热重载开发预览
 
 ---
 
-## 五、新增功能（文件浏览器 / 浏览模式）
+## 六、文件浏览器与左右滚动联动
 
-顶部「浏览模式」按钮在 **编辑模式** 与 **浏览模式** 间切换，状态会记住。
-
-### 编辑模式：左侧文件浏览器
+### 左侧文件浏览器
 - 点「打开目录」选一个文件夹，左侧列出其中文件（目录在上、可逐级进入，`..` 返回上级）。
 - 点文件即在右侧编辑+预览；`txt/md/html` 自动识别预览类型，也可手动用「自动/Markdown/HTML/文本」切换。
 - 上次打开的目录会被记住，下次启动自动列出。
 
-### 浏览模式：内置浏览器
-- 顶部地址栏输入网址（自动补 `https://`），回车或「前往」；`‹` 后退、`↻` 刷新。
-- 左侧面板变为「打开的页签」，可新建 / 切换 / 关闭页签。
-- 右侧可收起工具栏（点「▾」）：
-  - 「提取元素」：抓取当前页面全部资源（图片 / 链接 / 脚本 / 样式表）。
-  - 按类型筛选；勾选多个后「下载选中」批量下载，或每条右侧「下载」单下。
-  - 首次下载会让你选一个保存目录，之后本会话内复用。
-- 顶部地址栏右侧「⌨」按钮：展开/收起**控制台**（见下）。
-
-> ⚠️ **元素提取与下载走 Rust 端 `ureq` 同步请求**（避开前端跨域限制），因此本地文件与绝大多数网页都能抓；
-> 但页面里由 JS 动态懒加载的图片（如 `srcset`/`lazy`）静态解析可能漏抓，属已知限制。
-> 浏览器预览本身用 iframe 渲染，不受此限制。
-
-### 本次新增 1：浏览器「真实内核」+ 控制台
-- **点击无反应的根因**：之前用跨源 iframe 直接加载网页，父页面无法接管 `target=_blank` / `window.open`，也抓不到页面内部的 `console`，所以很多链接、弹窗「点了没反应」。
-- **新做法**：远程网页改用**同源 `srcdoc` 代理渲染**（底层仍是 WebView2 / Edge 内核，不是另起系统 Edge 进程）：
-  - 页面脚本正常执行，链接 / 弹窗（含 `target=_blank`）被接管并在本标签页内继续浏览；
-  - 注入脚本接管 `console.*` 与 `window.onerror`、未捕获 Promise，回传到主窗口；
-  - 顶部「⌨」按钮打开底部**控制台面板**，实时显示页面日志（log/info/warn/error 分色），可清空。
-- **本地 `file://` 文件**仍直接加载（避免 file:// 子资源在 srcdoc 中被拦截），因此本地文件的控制台不回传，属取舍。
-- **不留下任何痕迹**：浏览用的是 Tauri 自带的 WebView2，**与系统 Edge 浏览器完全隔离**（不会写入系统 Edge 的历史/缓存/Cookie），从根上满足「不在 Edge 中留痕」。
-
-> ⚠️ **局限**：`srcdoc` 代理抓取的是静态 HTML，页面内的 JS 动态请求（如 SPA 调接口拉数据）会因跨域在本源下失败，因此 React/Vue 这类单页应用可能显示空白骨架。这是代理式预览的固有取舍；如需完整内核体验可改走独立 WebView 窗口方案（另行评估）。
-
-### 本次新增 2：编辑模式左右滚动联动
+### 左右滚动联动
 - 编辑（左）与预览（右）滚动**双向联动**，对应行尽量显示在同一行。
 - 实现：Markdown 的各级标题、纯文本的每一行都标注了源文件行号（`data-line`），滚动一侧时按行号插值对齐另一侧。
 - HTML 预览用的是沙箱 iframe，无法做行级映射，故 HTML 模式不参与联动（仅 Markdown / 纯文本生效）。
 
 ### 构建说明
-
-### 构建说明
-- 一键打包用双击 **`build.bat`** 或 `npm run pack`（二者等价），产物会自动落到项目根目录。
-- 本轮后端新增 `ureq` 依赖（同步 HTTP 客户端，轻量、无需系统 TLS 库）。
-  **首次重新构建会编译 `ureq` 及其依赖，比之前多花几分钟**，属正常。
-- 同时放宽了 `tauri.conf.json` 的 CSP（`frame-src *` 等），否则 iframe 无法加载外部网页，必须重新构建才能生效。
+- 一键打包用双击 **`build.bat`** 或 `npm run pack`（二者等价），产物会自动落到项目根目录（`<项目目录>` 下）。
 - 想消除 SmartScreen「未知发布者」警告
   → 用 `signtool` 对 msi 签名（需代码签名证书）。

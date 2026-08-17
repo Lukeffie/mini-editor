@@ -35,60 +35,9 @@ mini-editor/
 - 设置项：分栏比例、浅/深主题、字体大小、自动保存；均持久化
 - 快捷键：Ctrl+S 保存，Ctrl+O 打开
 
-## 开发 / 构建
+## 安装与构建
 
-### 1. 前置依赖（一次性，仅本机需要）
-
-- **Rust**：https://rustup.rs （默认带 `x86_64-pc-windows-msvc`）
-- **Visual Studio Build Tools**：勾选「桌面开发 with C++」工作负载（提供 MSVC 链接器，缺它会报找不到 `link.exe`）
-- **Node.js** LTS
-- **Tauri CLI**：`npm install -g @tauri-apps/cli`（或全程用 `npx tauri`）
-
-> Windows 10 / 11 已自带 WebView2 运行时，无需额外安装。
-
-### 2. 安装前端依赖
-
-```bash
-cd mini-editor
-npm install
-```
-
-### 3. 生成图标（首次需要）
-
-```bash
-npm run icons
-```
-
-> 脚本会向 `src-tauri/icons/` 写入 32x32.png、128x128.png、128x128@2x.png、icon.ico。
-> 也可以用官方工具：`npx tauri icon 你的logo.png`。
-
-### 4. 本地开发预览（热更新，浏览器里跑前端）
-
-```bash
-npm run tauri dev
-```
-
-### 5. 打包成 .msi
-
-```bash
-npm run tauri build
-```
-
-产物位于：
-
-```
-src-tauri/target/release/bundle/msi/极简编辑器_1.0.0_x64_zh-CN.msi
-```
-
-体积约 5–15 MB。双击安装即可，无需管理员权限（默认装到当前用户的 `%LOCALAPPDATA%`）。
-
-## 只打 msi / 改安装行为
-
-- 已在 `tauri.conf.json` 设 `"targets": ["msi"]`，只产出 MSI。
-- WebView2 安装模式：`bundle.windows.webviewInstallMode.type`，可选
-  `downloadBootstrapper`（默认，包小、装时联网）/ `embedBootstrapper` / `offlineInstaller`（完全离线）/ `skip`（要求用户系统已有 WebView2）。
-- 多语言：已配 `["zh-CN","en-US"]`，会各出一个 msi。
-- 代码签名：用 `signtool` 对 msi 签名可消除 Windows SmartScreen 警告。
+环境安装（Node.js / Rust / VS 生成工具）、本地开发、打包成 `.msi` 等所有操作步骤，请见 **[SETUP.md](./SETUP.md)**。
 
 ## 已知说明
 

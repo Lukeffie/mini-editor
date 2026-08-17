@@ -6,21 +6,19 @@ import * as files from "./files.js";
 import "highlight.js/styles/github.css";
 import "./style.css";
 import { initExplorer } from "./explorer.js";
-import { initBrowser } from "./browser.js";
 import { setupScrollSync } from "./scrollsync.js";
 
 const $ = (id) => document.getElementById(id);
 
 const editorPane = $("editor-pane");
 const divider = $("divider");
-const split = $("split");
+const split = $("editor-area");
 const previewEl = $("preview");
 const iframeEl = $("preview-frame");
 const titleEl = $("title");
 const statusChars = $("status-chars");
 const statusSaved = $("status-saved");
 const modeSelect = $("mode-select");
-const btnMode = $("btn-mode");
 
 let settings = loadSettings();
 let currentPath = null;
@@ -30,7 +28,7 @@ let autoSaveTimer = null;
 
 const editor = createEditor($("editor"), {
   initialDoc:
-    "# 欢迎使用极简编辑器\n\n左边编辑，右边实时预览。\n\n- 支持 **Markdown** 渲染\n- 支持 HTML 预览（沙箱隔离）\n- 左侧可「打开目录」批量管理文件\n- 顶部可切换到「浏览模式」当浏览器用\n- 快捷键：Ctrl+S 保存，Ctrl+O 打开\n",
+    "# 欢迎使用极简编辑器\n\n左边编辑，右边实时预览。\n\n- 支持 **Markdown** 渲染\n- 支持 HTML 预览（沙箱隔离）\n- 左侧可「打开目录」批量管理文件\n- 快捷键：Ctrl+S 保存，Ctrl+O 打开\n",
   onChange: (text) => onContentChange(text),
 });
 
@@ -72,14 +70,20 @@ setupSplit({
   editorPane,
   divider,
   onRatioChange: (r) => {
-    settings.ratio = Math.round(r);
+    const rr = Math.round(r);
+    settings.ratio = rr;
     saveSettings(settings);
-    $("ratio-out").textContent = `${settings.ratio}% / ${100 - settings.ratio}%`;
-    $("ratio").value = settings.ratio;
+    $("ratio-out").textContent = `${rr}% / ${100 - rr}%`;
+    $("ratio").value = rr;
+    // 仅同步视图状态标记（不重设 flex-basis，否则会覆盖拖动值）
+    currentView = rr <= 0 ? "preview" : rr >= 100 ? "editor" : "split";
+    document.body.dataset.view = currentView;
+    updateViewSwitch();
+    editor.refresh();
   },
 });
 
-// ---- 文件浏览器（编辑模式左侧） ----
+// ---- 文件浏览器 ----
 function openFile(path) {
   files
     .readFile(path)
@@ -96,41 +100,27 @@ function openFile(path) {
     });
 }
 initExplorer({ onOpenFile: openFile });
-initBrowser();
 setupScrollSync({ editor, previewPane: $("preview-pane"), previewEl: $("preview") });
 
-// ---- 模式切换 ----
-function setMode(mode) {
-  settings.mode = mode;
-  const s = loadSettings();
-  s.mode = mode;
-  saveSettings(s);
-
-  const browse = mode === "browse";
-  $("editor-area").hidden = browse;
-  $("browser-area").hidden = !browse;
-  $("side-edit").hidden = browse;
-  $("side-browse").hidden = !browse;
-  $("edit-actions").hidden = browse;
-  btnMode.textContent = browse ? "编辑模式" : "浏览模式";
-  titleEl.textContent = browse ? "浏览器" : "极简编辑器";
-}
-btnMode.addEventListener("click", () =>
-  setMode(settings.mode === "edit" ? "browse" : "edit")
-);
-
-// settings drawer
-const settingsEl = $("settings");
-const backdrop = $("settings-backdrop");
-$("btn-settings").addEventListener("click", () => {
-  settingsEl.hidden = false;
-  backdrop.hidden = false;
+// settings / about modal dialogs
+const settingsModal = $("settings-modal");
+const aboutModal = $("about-modal");
+$("settings-close").addEventListener("click", () => settingsModal.close());
+$("about-close").addEventListener("click", () => aboutModal.close());
+settingsModal.addEventListener("click", (e) => {
+  if (e.target === settingsModal) settingsModal.close();
 });
-$("settings-close").addEventListener("click", closeSettings);
-backdrop.addEventListener("click", closeSettings);
-function closeSettings() {
-  settingsEl.hidden = true;
-  backdrop.hidden = true;
+aboutModal.addEventListener("click", (e) => {
+  if (e.target === aboutModal) aboutModal.close();
+});
+function openSettings() {
+  applySettings();
+  if (typeof settingsModal.showModal === "function") settingsModal.showModal();
+  else settingsModal.hidden = false;
+}
+function openAbout() {
+  if (typeof aboutModal.showModal === "function") aboutModal.showModal();
+  else aboutModal.hidden = false;
 }
 
 $("ratio").addEventListener("input", (e) => {
@@ -168,50 +158,197 @@ async function saveFile(path) {
   }
 }
 
-$("btn-new").addEventListener("click", () => {
-  editor.setContent("");
-  currentPath = null;
-  titleEl.textContent = "极简编辑器 — 未命名";
-  statusSaved.textContent = "就绪";
-  updateMode();
-});
-
-$("btn-open").addEventListener("click", async () => {
-  const p = await files.pickOpen();
-  if (!p) return;
-  try {
-    const txt = await files.readFile(p);
-    currentPath = p;
-    editor.setContent(txt);
-    titleEl.textContent = "极简编辑器 — " + p.split(/[\\/]/).pop();
-    statusSaved.textContent = "已打开";
-    updateMode();
-  } catch (e) {
-    statusSaved.textContent = "打开失败";
-    console.error(e);
-  }
-});
-
-$("btn-save").addEventListener("click", async () => {
-  let p = currentPath;
-  if (!p) p = await files.pickSave();
-  if (!p) return;
-  await saveFile(p);
-});
-
 // keyboard shortcuts
 window.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   if ((e.ctrlKey || e.metaKey) && k === "s") {
     e.preventDefault();
-    $("btn-save").click();
+    menuActions["save"]();
   }
   if ((e.ctrlKey || e.metaKey) && k === "o") {
     e.preventDefault();
-    $("btn-open").click();
+    menuActions["open"]();
+  }
+  if ((e.ctrlKey || e.metaKey) && k === "n") {
+    e.preventDefault();
+    menuActions["new"]();
   }
 });
 
+// ---- 视图切换：编辑 / 分栏 / 预览 ----
+let currentView = "split";
+function updateViewSwitch() {
+  document.querySelectorAll("#view-switch .view-btn").forEach((b) => {
+    b.classList.toggle("active", b.dataset.view === currentView);
+  });
+}
+function setView(view) {
+  currentView = view;
+  document.body.dataset.view = view;
+  updateViewSwitch();
+  // 切换视图时同步分栏比例（编辑=0，预览=100，分栏=上次比例）
+  if (view === "editor") {
+    editorPane.style.flexBasis = "100%";
+  } else if (view === "preview") {
+    editorPane.style.flexBasis = "0%";
+  } else {
+    editorPane.style.flexBasis = settings.ratio + "%";
+  }
+  editor.refresh();
+}
+
+// ---- 文件树显示 / 隐藏（折叠为左侧窄工具栏，不全隐藏） ----
+let sidebarSavedWidth = "250px";
+function toggleSidebar() {
+  const sb = $("sidebar");
+  const resizer = $("sidebar-resizer");
+  const collapsed = sb.classList.toggle("collapsed");
+  if (collapsed) {
+    // 记住当前宽度，折叠成窄栏
+    if (sb.style.flexBasis) sidebarSavedWidth = sb.style.flexBasis;
+    sb.style.flexBasis = "44px";
+    if (resizer) resizer.setAttribute("hidden", "");
+  } else {
+    sb.style.flexBasis = sidebarSavedWidth;
+    if (resizer) resizer.removeAttribute("hidden");
+  }
+}
+
+$("btn-toggle-sidebar")?.addEventListener("click", toggleSidebar);
+
+// ---- 右上角视图切换图标 ----
+$("view-switch")?.addEventListener("click", (e) => {
+  const btn = e.target.closest(".view-btn");
+  if (btn) setView(btn.dataset.view);
+});
+
+// ---- 字体缩放 ----
+function zoom(delta) {
+  settings.fontSize = Math.min(22, Math.max(12, settings.fontSize + delta));
+  applySettings();
+  saveSettings(settings);
+}
+
+// ---- 菜单栏动作分发 ----
+const menuActions = {
+  "new": () => {
+    editor.setContent("");
+    currentPath = null;
+    titleEl.textContent = "极简编辑器 — 未命名";
+    statusSaved.textContent = "就绪";
+    updateMode();
+  },
+  "open": async () => {
+    const p = await files.pickOpen();
+    if (!p) return;
+    try {
+      const txt = await files.readFile(p);
+      currentPath = p;
+      editor.setContent(txt);
+      titleEl.textContent = "极简编辑器 — " + p.split(/[\\/]/).pop();
+      statusSaved.textContent = "已打开";
+      updateMode();
+    } catch (e) {
+      statusSaved.textContent = "打开失败";
+      console.error(e);
+    }
+  },
+  "open-dir": () => $("btn-open-dir").click(),
+  "save": async () => {
+    let p = currentPath;
+    if (!p) p = await files.pickSave();
+    if (!p) return;
+    await saveFile(p);
+  },
+  "save-as": async () => {
+    const p = await files.pickSave();
+    if (!p) return;
+    await saveFile(p);
+  },
+  "undo": () => editor.undo(),
+  "redo": () => editor.redo(),
+  "cut": () => document.execCommand("cut"),
+  "copy": () => document.execCommand("copy"),
+  "paste": () => document.execCommand("paste"),
+  "select-all": () => editor.view.dispatch({ selection: { anchor: 0, head: editor.view.state.doc.length } }),
+  "select-line": () => {
+    const s = editor.view.state.selection.main;
+    const line = editor.view.state.doc.lineAt(s.head);
+    editor.view.dispatch({ selection: { anchor: line.from, head: line.to } });
+    editor.view.focus();
+  },
+  "toggle-sidebar": toggleSidebar,
+  "view-editor": () => setView("editor"),
+  "view-split": () => setView("split"),
+  "view-preview": () => setView("preview"),
+  "zoom-in": () => zoom(1),
+  "zoom-out": () => zoom(-1),
+  "zoom-reset": () => { settings.fontSize = 14; applySettings(); saveSettings(settings); },
+  "settings": openSettings,
+  "about": openAbout,
+};
+
+document.getElementById("menubar").addEventListener("click", (e) => {
+  const item = e.target.closest("[data-action]");
+  if (item) {
+    const fn = menuActions[item.dataset.action];
+    if (fn) fn();
+    closeAllMenus();
+    return;
+  }
+  const menu = e.target.closest(".menu");
+  if (menu) {
+    const open = menu.classList.contains("open");
+    closeAllMenus();
+    if (!open) menu.classList.add("open");
+  }
+});
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".menu")) closeAllMenus();
+});
+function closeAllMenus() {
+  document.querySelectorAll(".menu.open").forEach((m) => m.classList.remove("open"));
+}
+
 applySettings();
 updateMode();
-setMode(settings.mode || "edit");
+setView(currentView);
+
+// ---- 文件树宽度拖拽 ----
+(function setupSidebarResize() {
+  const resizer = $("sidebar-resizer");
+  const sidebar = $("sidebar");
+  const workspace = $("workspace");
+  if (!resizer || !sidebar || !workspace) return;
+  let dragging = false;
+
+  resizer.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    dragging = true;
+    resizer.setPointerCapture(e.pointerId);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  });
+  resizer.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const rect = workspace.getBoundingClientRect();
+    let w = e.clientX - rect.left;
+    w = Math.min(rect.width - 200, Math.max(160, w));
+    sidebar.style.flexBasis = w + "px";
+  });
+  function stop() {
+    if (!dragging) return;
+    dragging = false;
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    try { localStorage.setItem("me.sidebarWidth", sidebar.style.flexBasis); } catch (_) {}
+  }
+  resizer.addEventListener("pointerup", stop);
+  resizer.addEventListener("pointercancel", stop);
+
+  // 恢复上次宽度
+  try {
+    const saved = localStorage.getItem("me.sidebarWidth");
+    if (saved) sidebar.style.flexBasis = saved;
+  } catch (_) {}
+})();

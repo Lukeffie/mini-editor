@@ -3,5 +3,14 @@
   "identifier": "default",
   "description": "Capacidades por defecto",
   "windows": ["main"],
-  "permissions": []
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "core:window:allow-minimize",
+    "core:window:allow-maximize",
+    "core:window:allow-unmaximize",
+    "core:window:allow-is-maximized",
+    "core:window:allow-close",
+    "core:window:allow-internal-toggle-maximize"
+  ]
 }

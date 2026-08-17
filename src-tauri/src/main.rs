@@ -2,8 +2,6 @@
 
 use rfd::FileDialog;
 use std::fs;
-use std::io::Read;
-use std::path::{Path, PathBuf};
 
 #[derive(serde::Serialize)]
 struct FileEntry {
@@ -67,88 +65,6 @@ fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
     Ok(entries)
 }
 
-/// 抓取网页 HTML（file:// 走本地读取，http(s) 走 ureq）。用于元素提取。
-#[tauri::command]
-fn fetch_html(url: String) -> Result<String, String> {
-    if let Some(p) = url.strip_prefix("file://") {
-        return fs::read_to_string(p).map_err(|e| e.to_string());
-    }
-    ureq::get(&url)
-        .set("User-Agent", "Mozilla/5.0")
-        .call()
-        .map_err(|e| e.to_string())?
-        .into_string()
-        .map_err(|e| e.to_string())
-}
-
-/// 下载一个 URL 到指定目录，自动去重文件名，返回最终保存路径
-#[tauri::command]
-fn download_url(url: String, dir: String) -> Result<String, String> {
-    let (reader, name): (Box<dyn Read>, String) = if let Some(p) = url.strip_prefix("file://") {
-        let f = fs::File::open(p).map_err(|e| e.to_string())?;
-        (Box::new(f), filename_from_url(&url))
-    } else {
-        let resp = ureq::get(&url)
-            .set("User-Agent", "Mozilla/5.0")
-            .call()
-            .map_err(|e| e.to_string())?;
-        let name = filename_from_url(&url);
-        (Box::new(resp.into_reader()), name)
-    };
-
-    let mut buf = Vec::new();
-    let mut reader = reader;
-    reader.read_to_end(&mut buf).map_err(|e| e.to_string())?;
-
-    let dest = unique_path(&dir, &name);
-    fs::write(&dest, &buf).map_err(|e| e.to_string())?;
-    Ok(dest.to_string_lossy().to_string())
-}
-
-fn filename_from_url(url: &str) -> String {
-    let no_query = url.split(['?', '#']).next().unwrap_or(url);
-    let seg = no_query.rsplit('/').next().unwrap_or("");
-    let raw = if seg.is_empty() { "index" } else { seg };
-    let cleaned: String = raw
-        .chars()
-        .map(|c| match c {
-            '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
-            _ => c,
-        })
-        .collect();
-    if cleaned.is_empty() {
-        "download".to_string()
-    } else {
-        cleaned
-    }
-}
-
-fn unique_path(dir: &str, name: &str) -> PathBuf {
-    let cand = Path::new(dir).join(name);
-    if !cand.exists() {
-        return cand;
-    }
-    let stem = Path::new(name)
-        .file_stem()
-        .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| "file".to_string());
-    let ext = Path::new(name)
-        .extension()
-        .map(|e| e.to_string_lossy().to_string());
-    let mut i = 1;
-    loop {
-        let newname = match &ext {
-            Some(e) => format!("{}-{}.{}", stem, i, e),
-            None => format!("{}-{}", stem, i),
-        };
-        let next = Path::new(dir).join(newname);
-        if !next.exists() {
-            return next;
-        }
-        i += 1;
-    }
-}
-
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -157,9 +73,7 @@ fn main() {
             read_file,
             write_file,
             open_directory,
-            list_directory,
-            fetch_html,
-            download_url
+            list_directory
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

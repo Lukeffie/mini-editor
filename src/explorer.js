@@ -40,6 +40,12 @@ export async function loadDir(path) {
 function renderList(entries, dir) {
   els.list.innerHTML = "";
 
+  // 默认排序：文件夹置顶，文件在后，均按名称字符升序
+  const sorted = [...entries].sort((a, b) => {
+    if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
+    return a.name.localeCompare(b.name, "zh-Hans-CN");
+  });
+
   const liUp = document.createElement("li");
   liUp.innerHTML = `<span class="ic">📁</span><span class="name">..（上一级）</span>`;
   liUp.addEventListener("click", () => {
@@ -48,7 +54,7 @@ function renderList(entries, dir) {
   });
   els.list.appendChild(liUp);
 
-  for (const e of entries) {
+  for (const e of sorted) {
     const li = document.createElement("li");
     const ic = e.is_dir ? "📁" : iconFor(e.name);
     li.innerHTML = `<span class="ic">${ic}</span><span class="name"></span>`;

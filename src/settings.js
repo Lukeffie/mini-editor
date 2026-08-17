@@ -5,9 +5,6 @@ const defaults = {
   fontSize: 14,
   autoSave: false,
   lastDir: null, // 上次打开的目录
-  mode: "edit", // "edit" | "browse"
-  toolbarHidden: false, // 浏览模式工具栏是否收起
-  lastDownloadDir: null, // 上次下载目录（会话内复用）
 };
 
 export function loadSettings() {

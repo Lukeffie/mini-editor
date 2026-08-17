@@ -35,20 +35,6 @@ export async function listDirectory(path) {
   return [];
 }
 
-// 抓取网页 HTML（用于元素提取），返回文本
-export async function fetchHtml(url) {
-  if (isTauri) return await invoke("fetch_html", { url });
-  // 浏览器环境下直接 fetch（会受 CORS 限制）
-  const r = await fetch(url);
-  return await r.text();
-}
-
-// 下载一个 URL 到指定目录，返回保存路径
-export async function downloadUrl(url, dir) {
-  if (isTauri) return await invoke("download_url", { url, dir });
-  throw new Error("当前环境不支持下载");
-}
-
 // 浏览器环境（vite dev）下的退化方案，仅用于本地预览 UI。
 function fallback(mode) {
   return new Promise((resolve) => {
