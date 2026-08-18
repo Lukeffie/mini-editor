@@ -54,6 +54,18 @@
             <li data-action="view-split">编辑 + 预览（分栏）</li>
             <li data-action="view-preview">仅预览</li>
             <li class="sep"></li>
+            <li class="menu-group-label">风格</li>
+            <li data-action="style-minimal">极致极简</li>
+            <li data-action="style-mint">清新薄荷</li>
+            <li data-action="style-vibrant">高饱和撞色</li>
+            <li data-action="style-cyber">赛博朋克</li>
+            <li data-action="style-classic">复古古典</li>
+            <li data-action="style-ink">墨色国风</li>
+            <li class="sep"></li>
+            <li class="menu-group-label">外观</li>
+            <li data-action="mode-light">浅色模式</li>
+            <li data-action="mode-dark">深色模式</li>
+            <li class="sep"></li>
             <li data-action="zoom-in">放大字体</li>
             <li data-action="zoom-out">缩小字体</li>
             <li data-action="zoom-reset">重置字体</li>
@@ -152,11 +164,19 @@
           <output id="ratio-out">50% / 50%</output>
         </label>
         <label class="field">
-          <span>主题</span>
-          <select id="theme-select">
-            <option value="light">浅色</option>
-            <option value="dark">深色</option>
+          <span>风格</span>
+          <select id="style-select">
+            <option value="minimal">极致极简</option>
+            <option value="mint">清新薄荷</option>
+            <option value="vibrant">高饱和撞色</option>
+            <option value="cyber">赛博朋克</option>
+            <option value="classic">复古古典</option>
+            <option value="ink">墨色国风</option>
           </select>
+        </label>
+        <label class="field checkbox">
+          <input type="checkbox" id="dark-toggle" />
+          <span>深色模式</span>
         </label>
         <label class="field">
           <span>字体大小</span>

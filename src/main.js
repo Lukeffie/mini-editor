@@ -34,14 +34,44 @@ const editor = createEditor($("editor"), {
 
 function applySettings() {
   editorPane.style.flexBasis = settings.ratio + "%";
-  document.body.classList.toggle("dark", settings.theme === "dark");
+  // 应用风格 + 亮/暗
+  if (settings.style === "minimal") document.body.removeAttribute("data-style");
+  else document.body.setAttribute("data-style", settings.style);
+  document.body.classList.toggle("dark", !!settings.dark);
   document.documentElement.style.setProperty("--editor-font", settings.fontSize + "px");
   $("ratio").value = settings.ratio;
   $("ratio-out").textContent = `${settings.ratio}% / ${100 - settings.ratio}%`;
-  $("theme-select").value = settings.theme;
+  if ($("style-select")) $("style-select").value = settings.style;
+  if ($("dark-toggle")) $("dark-toggle").checked = settings.dark;
   $("font-size").value = settings.fontSize;
   $("font-size-out").textContent = settings.fontSize + "px";
   $("auto-save").checked = settings.autoSave;
+  updateStyleMenu();
+}
+
+// 切换风格：更新设置、立即生效并持久化（重新打开仍为该风格）
+function setStyle(style) {
+  settings.style = style;
+  applySettings();
+  saveSettings(settings);
+}
+
+// 切换亮/暗模式
+function setDark(dark) {
+  settings.dark = dark;
+  applySettings();
+  saveSettings(settings);
+}
+
+// 在视图菜单中标记当前风格与亮/暗状态
+function updateStyleMenu() {
+  document.querySelectorAll('[data-action^="style-"]').forEach((li) => {
+    li.classList.toggle("theme-active", settings.style === li.dataset.action.slice(6));
+  });
+  document.querySelectorAll('[data-action^="mode-"]').forEach((li) => {
+    const isDark = li.dataset.action === "mode-dark";
+    li.classList.toggle("theme-active", settings.dark === isDark);
+  });
 }
 
 function schedulePreview(text) {
@@ -130,8 +160,13 @@ $("ratio").addEventListener("input", (e) => {
   $("ratio-out").textContent = `${r}% / ${100 - r}%`;
   saveSettings(settings);
 });
-$("theme-select").addEventListener("change", (e) => {
-  settings.theme = e.target.value;
+$("style-select").addEventListener("change", (e) => {
+  settings.style = e.target.value;
+  applySettings();
+  saveSettings(settings);
+});
+$("dark-toggle").addEventListener("change", (e) => {
+  settings.dark = e.target.checked;
   applySettings();
   saveSettings(settings);
 });
@@ -281,6 +316,14 @@ const menuActions = {
   "view-editor": () => setView("editor"),
   "view-split": () => setView("split"),
   "view-preview": () => setView("preview"),
+  "style-minimal": () => setStyle("minimal"),
+  "style-mint": () => setStyle("mint"),
+  "style-vibrant": () => setStyle("vibrant"),
+  "style-cyber": () => setStyle("cyber"),
+  "style-classic": () => setStyle("classic"),
+  "style-ink": () => setStyle("ink"),
+  "mode-light": () => setDark(false),
+  "mode-dark": () => setDark(true),
   "zoom-in": () => zoom(1),
   "zoom-out": () => zoom(-1),
   "zoom-reset": () => { settings.fontSize = 14; applySettings(); saveSettings(settings); },
@@ -300,7 +343,10 @@ document.getElementById("menubar").addEventListener("click", (e) => {
   if (menu) {
     const open = menu.classList.contains("open");
     closeAllMenus();
-    if (!open) menu.classList.add("open");
+    if (!open) {
+      menu.classList.add("open");
+      if (menu.dataset.menu === "view") updateStyleMenu();
+    }
   }
 });
 document.addEventListener("click", (e) => {

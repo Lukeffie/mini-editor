@@ -9,7 +9,6 @@ src-tauri/gen/
 src-tauri/target/release/wix/
 
 # ---- 打包输出的安装包（根目录 msi / 各类安装包）----
-*.msi
 *.exe
 *.nsis
 src-tauri/target/release/bundle/
