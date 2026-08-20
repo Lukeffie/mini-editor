@@ -116,6 +116,7 @@ npm run tauri dev    # 开发预览（热重载）
 
 - **Gitee Releases（推荐）**：<https://gitee.com/lukeffie/mini-editor/releases>
   在 Releases 页面下载 `MiniEditor_x64_en-US.msi`，双击按提示安装即可。
+- **GitHub 仓库**：<https://github.com/Lukeffie/mini-editor.git>
 - **本地发行包**：仓库根目录已附带 `MiniEditor_1.0.0_x64_en-US.msi`（约 3.4 MB），可直接使用。
 
 > 系统要求：Windows 10/11 64 位，安装时会按需下载 WebView2 运行时（若系统尚未安装）。
