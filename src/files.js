@@ -40,7 +40,7 @@ function fallback(mode) {
   return new Promise((resolve) => {
     const i = document.createElement("input");
     i.type = "file";
-    if (mode === "open") i.accept = ".txt,.md,.markdown,.html,.htm,text/*";
+    if (mode === "open") i.accept = ".txt,.md,.markdown,.html,.htm,.json,.xml,text/*";
     i.onchange = () =>
       resolve(i.files[0] ? i.files[0].name : null);
     i.click();

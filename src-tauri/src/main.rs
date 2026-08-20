@@ -13,7 +13,10 @@ struct FileEntry {
 #[tauri::command]
 fn pick_open() -> Option<String> {
     FileDialog::new()
-        .add_filter("文本文件", &["txt", "md", "markdown", "html", "htm"])
+        .add_filter(
+            "支持的文件",
+            &["txt", "md", "markdown", "html", "htm", "json", "xml"],
+        )
         .pick_file()
         .map(|p| p.to_string_lossy().to_string())
 }
@@ -21,7 +24,10 @@ fn pick_open() -> Option<String> {
 #[tauri::command]
 fn pick_save() -> Option<String> {
     FileDialog::new()
-        .add_filter("文本文件", &["txt", "md", "markdown", "html", "htm"])
+        .add_filter(
+            "支持的文件",
+            &["txt", "md", "markdown", "html", "htm", "json", "xml"],
+        )
         .save_file()
         .map(|p| p.to_string_lossy().to_string())
 }

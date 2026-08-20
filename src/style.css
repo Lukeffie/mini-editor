@@ -368,7 +368,8 @@ body {
 }
 #editor { flex: 1; height: 100%; overflow: hidden; }
 .cm-editor { height: 100%; font-size: var(--editor-font); }
-.cm-scroller { overflow: auto; }
+/* 常驻 gutter：横向滚动条固定在编辑器底边，纵向滚动时也不会消失 */
+.cm-scroller { overflow: auto; scrollbar-gutter: stable; }
 
 /* 可拖拽分隔条 */
 .divider {
@@ -388,9 +389,24 @@ body {
 .divider:hover::after { background: var(--accent); }
 .divider:active { background: color-mix(in srgb, var(--accent) 35%, var(--bg-3)); }
 
-.preview-pane { flex: 1; overflow: auto; background: var(--bg); }
+/* 常驻 gutter：横向滚动条固定在预览区底边，纵向滚动时也不会消失 */
+.preview-pane { position: relative; flex: 1; overflow: auto; scrollbar-gutter: stable; background: var(--bg); }
 .preview { padding: 20px 28px; line-height: 1.75; max-width: 960px; margin: 0 auto; }
 .preview-frame { width: 100%; height: 100%; border: 0; background: #fff; }
+/* 预览加载态：覆盖在预览区上的居中 spinner */
+.preview-loading {
+  position: absolute; inset: 0; z-index: 5;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; color: var(--text-2); font-size: 13px;
+  background: var(--bg);
+}
+.preview-loading .spinner {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-top-color: var(--accent);
+  animation: preview-spin 0.7s linear infinite;
+}
+@keyframes preview-spin { to { transform: rotate(360deg); } }
 .preview pre.raw {
   white-space: pre-wrap; font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
 }
@@ -404,7 +420,7 @@ body {
   font-family: ui-monospace, Consolas, monospace; font-size: .9em;
 }
 .markdown-body pre {
-  background: var(--bg-3); padding: 14px 16px; border-radius: 10px; overflow: auto;
+  background: var(--bg-3); padding: 14px 16px; border-radius: 10px; overflow: auto; scrollbar-gutter: stable;
 }
 .markdown-body pre code { background: transparent; padding: 0; }
 .markdown-body blockquote {

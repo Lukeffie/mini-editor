@@ -10,15 +10,18 @@ import { setupScrollSync } from "./scrollsync.js";
 
 const $ = (id) => document.getElementById(id);
 
-const editorPane = $("editor-pane");
-const divider = $("divider");
-const split = $("editor-area");
-const previewEl = $("preview");
-const iframeEl = $("preview-frame");
-const titleEl = $("title");
-const statusChars = $("status-chars");
-const statusSaved = $("status-saved");
-const modeSelect = $("mode-select");
+// DOM 元素延迟到 DOMContentLoaded 中统一获取，避免在脚本早于 DOM 解析时取到 null
+let editorPane = null;
+let divider = null;
+let split = null;
+let previewEl = null;
+let iframeEl = null;
+let titleEl = null;
+let statusChars = null;
+let statusSaved = null;
+let modeSelect = null;
+let settingsModal = null;
+let aboutModal = null;
 
 let settings = loadSettings();
 let currentPath = null;
@@ -93,7 +96,29 @@ function updateMode() {
   currentMode = detectMode(currentPath, modeSelect.value);
   schedulePreview(editor.getContent());
 }
-modeSelect.addEventListener("change", updateMode);
+function openSettings() {
+  applySettings();
+  if (typeof settingsModal.showModal === "function") settingsModal.showModal();
+  else settingsModal.hidden = false;
+}
+function openAbout() {
+  if (typeof aboutModal.showModal === "function") aboutModal.showModal();
+  else aboutModal.hidden = false;
+}
+// 所有 DOM 获取与事件绑定统一在 DOMContentLoaded 后执行，确保元素一定存在
+window.addEventListener("DOMContentLoaded", () => {
+  editorPane = $("editor-pane");
+  divider = $("divider");
+  split = $("editor-area");
+  previewEl = $("preview");
+  iframeEl = $("preview-frame");
+  titleEl = $("title");
+  statusChars = $("status-chars");
+  statusSaved = $("status-saved");
+  modeSelect = $("mode-select");
+
+  if (modeSelect) modeSelect.addEventListener("change", updateMode);
+  else console.error("初始化警告：未找到 #mode-select 元素，请确认运行的是最新构建的前端代码。");
 
 setupSplit({
   container: split,
@@ -133,8 +158,8 @@ initExplorer({ onOpenFile: openFile });
 setupScrollSync({ editor, previewPane: $("preview-pane"), previewEl: $("preview") });
 
 // settings / about modal dialogs
-const settingsModal = $("settings-modal");
-const aboutModal = $("about-modal");
+settingsModal = $("settings-modal");
+aboutModal = $("about-modal");
 $("settings-close").addEventListener("click", () => settingsModal.close());
 $("about-close").addEventListener("click", () => aboutModal.close());
 settingsModal.addEventListener("click", (e) => {
@@ -143,15 +168,6 @@ settingsModal.addEventListener("click", (e) => {
 aboutModal.addEventListener("click", (e) => {
   if (e.target === aboutModal) aboutModal.close();
 });
-function openSettings() {
-  applySettings();
-  if (typeof settingsModal.showModal === "function") settingsModal.showModal();
-  else settingsModal.hidden = false;
-}
-function openAbout() {
-  if (typeof aboutModal.showModal === "function") aboutModal.showModal();
-  else aboutModal.hidden = false;
-}
 
 $("ratio").addEventListener("input", (e) => {
   const r = +e.target.value;
@@ -179,6 +195,12 @@ $("auto-save").addEventListener("change", (e) => {
   settings.autoSave = e.target.checked;
   saveSettings(settings);
 });
+
+// 初始化：确保所有 DOM 元素已赋值后再应用设置/模式/视图
+applySettings();
+updateMode();
+setView(currentView);
+}); // end DOMContentLoaded
 
 // file operations
 async function saveFile(path) {
@@ -355,10 +377,6 @@ document.addEventListener("click", (e) => {
 function closeAllMenus() {
   document.querySelectorAll(".menu.open").forEach((m) => m.classList.remove("open"));
 }
-
-applySettings();
-updateMode();
-setView(currentView);
 
 // ---- 文件树宽度拖拽 ----
 (function setupSidebarResize() {

@@ -1,5 +1,6 @@
 import * as files from "./files.js";
 import { patchSettings } from "./settings.js";
+import { SUPPORTED_EXT } from "./preview.js";
 
 let currentDir = null;
 let onOpenFile = null;
@@ -55,6 +56,11 @@ function renderList(entries, dir) {
   els.list.appendChild(liUp);
 
   for (const e of sorted) {
+    // 仅显示支持的文件格式（目录始终显示）
+    if (!e.is_dir) {
+      const ext = (e.name.split(".").pop() || "").toLowerCase();
+      if (!SUPPORTED_EXT.includes(ext)) continue;
+    }
     const li = document.createElement("li");
     const ic = e.is_dir ? "📁" : iconFor(e.name);
     li.innerHTML = `<span class="ic">${ic}</span><span class="name"></span>`;
@@ -73,15 +79,22 @@ function iconFor(name) {
   if (["md", "markdown"].includes(ext)) return "📝";
   if (["html", "htm"].includes(ext)) return "🌐";
   if (["txt"].includes(ext)) return "📄";
+  if (["json"].includes(ext)) return "🔧";
+  if (["xml"].includes(ext)) return "📰";
   if (["png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "ico"].includes(ext)) return "🖼️";
-  if (["css", "js", "ts", "json", "rs", "py"].includes(ext)) return "⚙️";
+  if (["css", "js", "ts", "rs", "py"].includes(ext)) return "⚙️";
   return "📄";
 }
 
 function parentDir(p) {
   const sep = p.includes("\\") ? "\\" : "/";
-  const parts = p.split(sep).filter(Boolean);
+  // 去掉尾随分隔符后再拆分，避免 "C:\" 被拆成 ["C:", ""]
+  const norm = p.replace(new RegExp(`\\${sep}+$`), "");
+  const parts = norm.split(sep).filter(Boolean);
+  // 已到盘符根目录（如 C:）或系统根（/），不再向上
   if (parts.length <= 1) return null;
   parts.pop();
-  return parts.join(sep) || (sep === "\\" ? parts[0] + "\\" : "/");
+  // 回到 Windows 盘符根目录时补全尾部分隔符，确保指向 C:\ 而非相对的 C:
+  if (parts.length === 1 && /^[a-zA-Z]:$/.test(parts[0])) return parts[0] + sep;
+  return parts.join(sep);
 }
