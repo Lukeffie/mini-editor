@@ -8,7 +8,7 @@
 //   npm run make:icons                         # 使用默认源图
 //   npm run make:icons -- "路径/源图.png"       # 指定源图
 //
-// 默认源图：C:\Users\Luke\Pictures\多风格设计方案.png
+// 默认源图：项目根目录的 icon.png
 //
 // 输出：src-tauri/icons/
 //   32x32.png
@@ -30,7 +30,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.resolve(__dirname, "../src-tauri/icons");
 fs.mkdirSync(outDir, { recursive: true });
 
-const DEFAULT_SRC = "C:\\Users\\Luke\\Pictures\\多风格设计方案.png";
+const DEFAULT_SRC = path.resolve(__dirname, "../icon.png");
 const srcArg = process.argv[2];
 const src = srcArg ? path.resolve(srcArg) : DEFAULT_SRC;
 
@@ -230,5 +230,9 @@ for (const [s, name] of targets) {
 const png256 = encodePng(scaleImage(rgba, sw, sh, 256, 256), 256);
 fs.writeFileSync(path.join(outDir, "icon.ico"), encodeIco(png256));
 console.log("  ✓ 生成 icon.ico");
+
+// Tauri 规范要求的源图标（用于生成 Square* 系列与嵌入 exe）
+fs.writeFileSync(path.join(outDir, "icon.png"), encodePng(scaleImage(rgba, sw, sh, 512, 512), 512));
+console.log("  ✓ 生成 icon.png (512x512)");
 
 console.log(`\n完成。图标输出目录：${outDir}`);
