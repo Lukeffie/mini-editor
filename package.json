@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "icons": "node scripts/make-icons.mjs",
+    "remove:bg": "node scripts/remove-bg.mjs",
     "gen-icons": "node scripts/gen-icons.mjs",
     "pack": "tauri build --bundles msi && node scripts/copy-msi.mjs"
   },

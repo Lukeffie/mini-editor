@@ -12,6 +12,17 @@ call npm install
 if errorlevel 1 goto fail
 
 echo.
+echo [1.5/3] Cleaning icon/build cache (force re-embed new icons)
+if exist "src-tauri\target\release\resources" rmdir /s /q "src-tauri\target\release\resources"
+if exist "src-tauri\target\release\build" rmdir /s /q "src-tauri\target\release\build"
+echo   cache cleaned.
+
+echo.
+echo [1.7/3] Regenerating icons (square crop + rounded corners, transparent bg)
+call npm run icons
+if errorlevel 1 goto fail
+
+echo.
 echo [2/3] Building and packaging MSI (first run takes a few minutes)
 call npm run tauri -- build --bundles msi
 if errorlevel 1 goto fail
