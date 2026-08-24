@@ -359,7 +359,8 @@ body {
 .file-list li .close:hover { opacity: 1; }
 
 /* ---------- 分栏 ---------- */
-.split { display: flex; flex: 1; min-height: 0; }
+.split { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.split-row { display: flex; flex: 1; min-height: 0; }
 .pane { min-width: 0; overflow: hidden; }
 .editor-pane {
   flex: 0 0 auto; flex-basis: 50%; display: flex;
@@ -393,6 +394,46 @@ body {
 .preview-pane { position: relative; flex: 1; overflow: auto; scrollbar-gutter: stable; background: var(--bg); }
 .preview { padding: 20px 28px; line-height: 1.75; max-width: 960px; margin: 0 auto; }
 .preview-frame { width: 100%; height: 100%; border: 0; background: #fff; }
+
+/* 页签栏 */
+.tabbar {
+  display: flex;
+  align-items: stretch;
+  height: 34px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+  flex: none;
+}
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 12px;
+  max-width: 200px;
+  border-right: 1px solid var(--border);
+  color: var(--text-2);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+.tab:hover { background: var(--bg-3); }
+.tab.active {
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.tab-name { overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.tab-close {
+  flex: none;
+  width: 16px; height: 16px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; background: transparent; color: var(--text-2);
+  border-radius: 4px; font-size: 14px; line-height: 1; cursor: pointer;
+}
+.tab-close:hover { background: #e5484d; color: #fff; }
+
 /* 预览加载态：覆盖在预览区上的居中 spinner */
 .preview-loading {
   position: absolute; inset: 0; z-index: 5;

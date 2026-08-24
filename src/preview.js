@@ -2,17 +2,77 @@ import { marked } from "marked";
 import hljs from "highlight.js";
 import xml from "highlight.js/lib/languages/xml";
 import json from "highlight.js/lib/languages/json";
+import yaml from "highlight.js/lib/languages/yaml";
+import { dirname, join } from "@tauri-apps/api/path";
+import * as files from "./files.js";
 
-// 显式注册语言：highlight.js 默认构建未包含 xml/json，未注册时高亮会报错导致预览空白。
+// 显式注册语言：highlight.js 默认构建未包含 xml/json/yaml，未注册时高亮会报错导致预览空白。
 // 用 try/catch 包裹，避免任何注册异常导致整个 preview 模块加载失败（进而使 detectMode/render 失效、所有文件都打不开）。
 try {
   if (xml) hljs.registerLanguage("xml", xml);
   if (json) hljs.registerLanguage("json", json);
+  if (yaml) hljs.registerLanguage("yaml", yaml);
 } catch (_) {
   /* 语言包缺失时降级为纯文本高亮，不影响打开与预览 */
 }
 
 marked.setOptions({ gfm: true, breaks: true });
+
+// 把相对图片路径解析为可在 webview 中加载的地址。
+// 策略：本地图片统一读取为 base64 data URI 内联，避免依赖 asset 协议
+// （dev 模式下 asset 服务器可能未监听，导致 ERR_CONNECTION_REFUSED；且不受 CSP 限制）。
+// 远程 http(s)/data/blob 地址原样返回。
+async function resolveImageSrc(src, filePath) {
+  if (!src) return src;
+  if (/^(https?:)?\/\//i.test(src) || /^(data|blob):/i.test(src)) {
+    return src;
+  }
+  if (!filePath) return src; // 无本地路径（如拖入）则保持原样
+  // marked/浏览器会把链接/图片里的非 ASCII 路径做 URL 编码，需解码回原始中文
+  let rawSrc = src;
+  try { rawSrc = decodeURIComponent(src); } catch (_) {}
+  // 用 Tauri 官方 path API 基于文档目录拼接出绝对路径
+  let abs;
+  if (/^[a-zA-Z]:[\\/]/.test(rawSrc) || rawSrc.startsWith("/")) {
+    abs = rawSrc; // 绝对路径直接用
+  } else {
+    const dir = await dirname(filePath);
+    abs = await join(dir, rawSrc);
+  }
+  // Tauri 环境：读取图片二进制并内联为 data URI
+  if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+    try {
+      const dataUri = await files.readFileBase64(abs);
+      console.log("[img] src=", src, " decoded=", rawSrc, " abs=", abs, " dataUri?", !!dataUri);
+      if (dataUri) return dataUri;
+    } catch (e) {
+      console.error("读取图片失败", abs, e);
+    }
+  }
+  // 退化：浏览器环境尝试 file://；Tauri 下若读不到则不强行 file://（会被跨源拦截显示 about:blank#blocked）
+  if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+    return src; // 保持原始相对路径，至少不出现 about:blank#blocked
+  }
+  return "file:///" + abs.replace(/\\/g, "/").replace(/^\//, "");
+}
+
+// HTML 预览：把内容里 <img src="相对"> 的相对路径转为可加载地址（脚本/样式不动）
+async function resolveHtmlImages(html, filePath) {
+  const re = /(<img\b[^>]*\bsrc=")([^"]*)(")/gi;
+  const promises = [];
+  const out = html.replace(re, (m, pre, src, post) => {
+    promises.push(
+      resolveImageSrc(src, filePath).then((resolved) => ({ src, resolved }))
+    );
+    return m; // 先占位，异步替换
+  });
+  if (!promises.length) return html;
+  const map = await Promise.all(promises);
+  const bySrc = new Map(map.map((x) => [x.src, x.resolved]));
+  return out.replace(re, (m, pre, src, post) =>
+    bySrc.has(src) ? pre + bySrc.get(src) + post : m
+  );
+}
 
 // 编辑器支持的文件格式（用于文件树过滤、预览模式识别）
 export const SUPPORTED_EXT = [
@@ -23,6 +83,8 @@ export const SUPPORTED_EXT = [
   "htm",
   "json",
   "xml",
+  "yaml",
+  "yml",
 ];
 
 function escapeHtml(s) {
@@ -39,6 +101,7 @@ export function detectMode(filename, selected) {
   if (ext === "html" || ext === "htm") return "html";
   if (ext === "json") return "json";
   if (ext === "xml") return "xml";
+  if (ext === "yaml" || ext === "yml") return "yaml";
   return "txt";
 }
 
@@ -59,7 +122,12 @@ function annotateMarkdown(previewEl, content) {
   });
 }
 
-export function render(previewEl, iframeEl, content, mode) {
+// 渲染（含图片异步加载）完成后通知，供滚动联动重建锚点，避免图片加载后布局变化导致左右对不齐
+function notifyRendered(previewEl) {
+  previewEl.dispatchEvent(new CustomEvent("preview:rendered"));
+}
+
+export async function render(previewEl, iframeEl, content, mode, filePath) {
   if (mode === "html") {
     previewEl.hidden = true;
     iframeEl.hidden = false;
@@ -75,6 +143,7 @@ export function render(previewEl, iframeEl, content, mode) {
     if (loading) loading.style.display = "flex";
     iframeEl.onload = () => {
       if (loading) loading.style.display = "none";
+      notifyRendered(previewEl);
     };
     // 允许脚本执行（sandbox="allow-scripts"，不含 allow-same-origin，避免可逃逸沙箱警告），
     // 并注入内联错误捕获脚本：把脚本错误 / 资源加载失败直接显示在预览页顶部，
@@ -97,7 +166,7 @@ export function render(previewEl, iframeEl, content, mode) {
       "blockquote{border-left:3px solid #4f8cff;margin:8px 0;padding-left:8px;color:#555}</style>" +
       errCatcher +
       "</head><body>" +
-      content +
+      await resolveHtmlImages(content, filePath) +
       "</body></html>";
     return;
   }
@@ -117,22 +186,33 @@ export function render(previewEl, iframeEl, content, mode) {
         )
         .join("") +
       "</div>";
+    notifyRendered(previewEl);
     return;
   }
 
-  if (mode === "json" || mode === "xml") {
+  if (mode === "json" || mode === "xml" || mode === "yaml") {
     renderData(previewEl, content, mode);
+    notifyRendered(previewEl);
     return;
   }
 
   // markdown
   previewEl.innerHTML = marked.parse(content);
+  // 把相对图片路径解析为可加载地址（基于当前文档目录）
+  const imgs = Array.from(previewEl.querySelectorAll("img"));
+  await Promise.all(
+    imgs.map(async (img) => {
+      const resolved = await resolveImageSrc(img.getAttribute("src"), filePath);
+      if (resolved) img.setAttribute("src", resolved);
+    })
+  );
   previewEl.querySelectorAll("pre code").forEach((b) => {
     try {
       hljs.highlightElement(b);
     } catch (_) {}
   });
   annotateMarkdown(previewEl, content);
+  notifyRendered(previewEl);
 }
 
 // JSON / XML 格式化 + 语法高亮预览
@@ -149,6 +229,10 @@ function renderData(previewEl, content, mode) {
     }
     code = pretty;
     lang = "json";
+  } else if (mode === "yaml") {
+    // YAML 不需格式化，直接高亮原内容
+    code = content;
+    lang = "yaml";
   } else {
     // XML：尽量美化缩进
     try {

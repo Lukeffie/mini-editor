@@ -13,6 +13,7 @@ tauri = { version = "2", features = [] }
 rfd = "0.14"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+base64 = "0.22"
 
 [features]
 # 生产构建时使用，关闭 devUrl 仅以 frontendDist 作为内容来源

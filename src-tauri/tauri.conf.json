@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; img-src * data: blob:; media-src * data: blob:; frame-src *; style-src * 'unsafe-inline'; font-src * data:; script-src * 'unsafe-inline' 'unsafe-eval'"
+      "csp": "default-src * 'unsafe-inline' 'unsafe-eval' data: blob: asset:; img-src * data: blob: asset:; media-src * data: blob: asset:; frame-src *; style-src * 'unsafe-inline'; font-src * data:; script-src * 'unsafe-inline' 'unsafe-eval'"
     }
   },
   "bundle": {
@@ -40,6 +40,12 @@
         "language": ["en-US"],
         "template": "wix/main.wxs"
       }
-    }
+    },
+    "fileAssociations": [
+      { "ext": ["md", "markdown"], "name": "Markdown 文档", "role": "Editor" },
+      { "ext": ["txt"], "name": "文本文档", "role": "Editor" },
+      { "ext": ["html", "htm"], "name": "HTML 文档", "role": "Editor" },
+      { "ext": ["json", "xml"], "name": "数据文档", "role": "Editor" }
+    ]
   }
 }

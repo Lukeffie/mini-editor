@@ -18,6 +18,24 @@ export async function readFile(path) {
   throw new Error("当前环境不支持文件读取");
 }
 
+// 读取文件为 base64 data URI（Tauri 下可用，浏览器环境不支持）
+export async function readFileBase64(path) {
+  if (isTauri) return await invoke("read_file_base64", { path });
+  return null;
+}
+
+// 用系统默认程序打开文件（不支持的二进制格式直接交给系统处理）。浏览器环境不支持。
+export async function openInSystem(path) {
+  if (isTauri) return await invoke("open_in_system", { path });
+  throw new Error("当前环境不支持用系统程序打开文件");
+}
+
+// 取回文件关联启动时传入的待打开路径（仅 Tauri，且只取一次）
+export async function getLaunchPath() {
+  if (isTauri) return await invoke("get_launch_path");
+  return null;
+}
+
 export async function writeFile(path, content) {
   if (isTauri) return await invoke("write_file", { path, content });
   throw new Error("当前环境不支持文件写入");

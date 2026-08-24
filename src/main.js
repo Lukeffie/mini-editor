@@ -1,8 +1,10 @@
 import { createEditor } from "./editor.js";
 import { render, detectMode } from "./preview.js";
+import { EditorView } from "codemirror";
 import { setupSplit } from "./split.js";
 import { loadSettings, saveSettings } from "./settings.js";
 import * as files from "./files.js";
+import { dirname, join } from "@tauri-apps/api/path";
 import "highlight.js/styles/github.css";
 import "./style.css";
 import { initExplorer } from "./explorer.js";
@@ -79,7 +81,7 @@ function updateStyleMenu() {
 
 function schedulePreview(text) {
   clearTimeout(previewTimer);
-  previewTimer = setTimeout(() => render(previewEl, iframeEl, text, currentMode), 200);
+  previewTimer = setTimeout(() => render(previewEl, iframeEl, text, currentMode, currentPath), 200);
 }
 
 function onContentChange(text) {
@@ -138,24 +140,288 @@ setupSplit({
   },
 });
 
-// ---- 文件浏览器 ----
-function openFile(path) {
+// ---- 页签（Tab）系统 ----
+const tabs = [];
+let activeTab = null;
+let tabSeq = 0;
+const history = []; // 浏览历史（path 序列），用于前进 / 后退
+let histIndex = -1;
+
+function updateNavButtons() {
+  const b = $("btn-back");
+  const f = $("btn-forward");
+  if (b) b.disabled = histIndex <= 0;
+  if (f) f.disabled = histIndex >= history.length - 1;
+}
+
+function renderTabs() {
+  const bar = $("tabbar");
+  if (!bar) return;
+  bar.innerHTML = "";
+  tabs.forEach((t) => {
+    const el = document.createElement("div");
+    el.className = "tab" + (t === activeTab ? " active" : "");
+    el.title = t.path;
+    const name = document.createElement("span");
+    name.className = "tab-name";
+    name.textContent = t.path.split(/[\\/]/).pop();
+    el.appendChild(name);
+    const close = document.createElement("button");
+    close.className = "tab-close";
+    close.textContent = "×";
+    close.title = "关闭";
+    close.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeTab(t);
+    });
+    el.appendChild(close);
+    el.addEventListener("click", () => switchToTab(t));
+    bar.appendChild(el);
+  });
+}
+
+// 切换到一个已存在的 tab：先保存当前编辑器内容，再加载目标 tab 的内容
+function switchToTab(t) {
+  if (!t) return;
+  if (activeTab) activeTab.content = editor.getContent();
+  activeTab = t;
+  currentPath = t.path;
+  editor.setContent(t.content != null ? t.content : "");
+  titleEl.textContent = "极简编辑器 — " + t.path.split(/[\\/]/).pop();
+  statusSaved.textContent = "已打开";
+  updateMode();
+  renderTabs();
+  updateNavButtons();
+}
+
+// 本编辑器支持的纯文本/可预览格式；其余（如 xlsx、docx、pdf、图片等二进制）直接交给系统默认程序打开
+const TEXT_EXTS = [
+  "txt", "md", "markdown", "html", "htm", "json", "xml", "yaml", "yml",
+];
+
+// 打开文件为 tab。activate=false 时只登记 tab 不切换当前视图（用于链接点击，避免跳动）。
+function openFileInTab(path, { record = true, activate = true } = {}) {
+  if (!path) return;
+  // 不支持的二进制格式：交给系统默认程序打开，不尝试以文本读取
+  const ext = (path.split(".").pop() || "").toLowerCase();
+  if (!TEXT_EXTS.includes(ext)) {
+    files
+      .openInSystem(path)
+      .then(() => {
+        statusSaved.textContent = "已调用系统程序打开：" + path.split(/[\\/]/).pop();
+      })
+      .catch((e) => {
+        statusSaved.textContent = "无法打开该文件";
+        console.error(e);
+      });
+    return;
+  }
+  const existing = tabs.find((t) => t.path === path);
+  if (existing) {
+    if (activate && activeTab !== existing) switchToTab(existing);
+    else renderTabs();
+    if (record) pushHistory(path);
+    return;
+  }
+  if (activeTab) activeTab.content = editor.getContent(); // 保存当前内容
   files
     .readFile(path)
     .then((txt) => {
-      currentPath = path;
-      editor.setContent(txt);
-      titleEl.textContent = "极简编辑器 — " + path.split(/[\\/]/).pop();
-      statusSaved.textContent = "已打开";
-      updateMode();
+      const t = { id: ++tabSeq, path, content: txt };
+      tabs.push(t);
+      if (activate) switchToTab(t);
+      else {
+        // 仅登记，保持当前视图不动
+        if (!activeTab) switchToTab(t); // 首次无任何 tab 时仍要显示
+        else renderTabs();
+      }
+      if (record) pushHistory(path);
     })
     .catch((e) => {
       statusSaved.textContent = "打开失败";
       console.error(e);
     });
 }
+
+function closeTab(t) {
+  const idx = tabs.indexOf(t);
+  if (idx < 0) return;
+  // 若关闭的是当前 tab，先把其内容存好（其实已存），再从列表移除
+  tabs.splice(idx, 1);
+  if (activeTab === t) {
+    activeTab = null;
+    currentPath = null;
+    if (tabs.length) {
+      switchToTab(tabs[Math.max(0, idx - 1)]);
+    } else {
+      editor.setContent("");
+      titleEl.textContent = "极简编辑器 — 未命名";
+      updateMode();
+    }
+  }
+  renderTabs();
+}
+
+function pushHistory(path) {
+  history.splice(histIndex + 1); // 截断"未来"分支
+  history.push(path);
+  histIndex = history.length - 1;
+  updateNavButtons();
+}
+
+function navigate(path, record = true) {
+  openFileInTab(path, { record, activate: true });
+}
+function goBack() {
+  if (histIndex > 0) {
+    histIndex -= 1;
+    openFileInTab(history[histIndex], { record: false, activate: true });
+  }
+}
+function goForward() {
+  if (histIndex < history.length - 1) {
+    histIndex += 1;
+    openFileInTab(history[histIndex], { record: false, activate: true });
+  }
+}
+// 供外部（文件树、拖拽、菜单）调用的统一入口
+function openFile(path) {
+  openFileInTab(path, { record: true, activate: true });
+}
+// ---- 拖拽打开文件 ----
+const isTauri = "__TAURI_INTERNALS__" in window;
+
+// 浏览器/退化环境：从 File 对象读取并打开
+function openDroppedFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    currentPath = null; // 拖入文件无本地路径，保存时按另存处理
+    editor.setContent(reader.result);
+    titleEl.textContent = "极简编辑器 — " + file.name;
+    statusSaved.textContent = "已打开（拖入）";
+    updateMode();
+  };
+  reader.onerror = () => {
+    statusSaved.textContent = "打开失败";
+    console.error(reader.error);
+  };
+  reader.readAsText(file);
+}
+
+// Tauri 环境：文件拖入 webview 走 onDragDropEvent，拿到本地路径
+if (isTauri) {
+  import("@tauri-apps/api/webview")
+    .then(({ getCurrentWebview }) => {
+      getCurrentWebview().onDragDropEvent(({ payload }) => {
+        if (payload.type === "drop" && payload.paths && payload.paths.length) {
+          openFile(payload.paths[0]);
+        }
+      });
+    })
+    .catch((e) => console.error("拖放初始化失败", e));
+
+  // 文件关联（右键"打开方式"）启动时的路径，改为前端就绪后通过 files.getLaunchPath() 查询，
+  // 避免 setup 阶段 emit 时前端尚未监听而丢失（见 DOMContentLoaded 中的处理）。
+} else {
+  // 浏览器退化：DOM drop 事件
+  const appRoot = $("app");
+  if (appRoot) {
+    appRoot.addEventListener("dragover", (e) => e.preventDefault());
+    appRoot.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) openDroppedFile(f);
+    });
+  }
+}
+
+// 左上角"打开文件"按钮：选择单个文件并打开
+const openFileBtn = $("btn-open-file");
+if (openFileBtn) {
+  openFileBtn.addEventListener("click", async () => {
+    const p = await files.pickOpen();
+    if (p) openFile(p);
+  });
+}
+
+// 顶部"后退 / 前进"按钮
+$("btn-back")?.addEventListener("click", goBack);
+$("btn-forward")?.addEventListener("click", goForward);
+updateNavButtons();
+
+// 预览区内链接点击：相对链接（如 other.md）基于当前文档目录打开并记入历史，
+// 远程 http(s) 链接在新窗口打开，锚点(#)不处理。
+previewEl.addEventListener("click", async (e) => {
+  // 点击可能落在 <a> 内的文本节点上，需要规整到 Element 再 closest
+  const t = e.target;
+  const el = t instanceof Element ? t : t && t.parentElement;
+  if (!el) return;
+  const a = el.closest("a[href]");
+  if (!a) return;
+  const href = a.getAttribute("href");
+  if (!href) return;
+  if (/^https?:\/\//i.test(href)) {
+    e.preventDefault();
+    window.open(href, "_blank");
+    return;
+  }
+  if (/^(mailto:|#)/i.test(href)) return; // 邮件/锚点不拦截
+  e.preventDefault();
+  if (!currentPath) return;
+  try {
+    // marked 会把链接里的非 ASCII 路径做 URL 编码（如 图片和附件 -> %E5%9B%BE...），
+    // 需解码回原始中文，否则 join 出的路径在磁盘上不存在
+    let rawHref = href;
+    try { rawHref = decodeURIComponent(href); } catch (_) {}
+    const dir = await dirname(currentPath);
+    const target = await join(dir, rawHref);
+    console.log("[link] currentPath=", currentPath, " dir=", dir, " href=", href, " -> target=", target);
+    // 点击链接后切换到新打开的页签；可后退跳回原文档
+    openFileInTab(target, { record: true, activate: true });
+  } catch (err) {
+    console.error("链接跳转失败", err);
+  }
+});
+
 initExplorer({ onOpenFile: openFile });
-setupScrollSync({ editor, previewPane: $("preview-pane"), previewEl: $("preview") });
+const scrollSync = setupScrollSync({ editor, previewPane: $("preview-pane"), previewEl: $("preview") });
+
+// 文件关联（右键"打开方式"）启动时，Rust 端在 setup 阶段先把路径存入状态，
+// 前端就绪后再查询并打开（避免 setup 阶段 emit 时前端尚未监听而丢失）
+if (isTauri) {
+  files
+    .getLaunchPath()
+    .then((p) => {
+      if (p) openFile(p);
+    })
+    .catch((e) => console.error("读取启动路径失败", e));
+}
+
+// 预览渲染（含图片加载）完成后重建滚动锚点，避免左右滚动对不齐
+previewEl.addEventListener("preview:rendered", () => scrollSync && scrollSync.rebuild());
+
+// 点击预览中的标题，把编辑器滚动到对应的源文件行（标题作为锚点）
+previewEl.addEventListener("click", (e) => {
+  // 链接点击已在上方单独处理，这里只处理标题跳转
+  const t = e.target;
+  const el = t instanceof Element ? t : t && t.parentElement;
+  if (!el) return;
+  const a = el.closest("a[href]");
+  if (a) return;
+  const h = el.closest("h1,h2,h3,h4,h5,h6");
+  if (!h) return;
+  const lineAttr = h.getAttribute("data-line");
+  if (!lineAttr) return;
+  const line = parseInt(lineAttr, 10);
+  if (isNaN(line)) return;
+  const ln = Math.min(line, editor.view.state.doc.lines);
+  const lineObj = editor.view.state.doc.line(ln);
+  editor.view.dispatch({
+    effects: EditorView.scrollIntoView(lineObj.from, { y: "start" }),
+  });
+  editor.view.focus();
+});
+
 
 // settings / about modal dialogs
 settingsModal = $("settings-modal");

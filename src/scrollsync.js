@@ -1,15 +1,18 @@
 import { EditorView } from "codemirror";
 
-// 编辑器（左）与预览（右）滚动联动：对应行尽量显示在同一行。
-// 锚点来自预览元素上的 data-line（标题 / 纯文本行）。
+// 编辑器（左）与预览（右）滚动联动：以预览中的标题/行号（data-line）为锚点对齐。
+// 关键：图片是异步加载的，加载完成后预览布局会变，因此必须在渲染完成事件
+// （preview:rendered）后重建锚点，否则锚点位置是过期的，导致左右滚动对不齐。
 
 let anchors = [];
 let syncing = false;
 let t1 = null;
 let t2 = null;
+let r1 = null;
 
 function buildAnchors(previewEl, previewPane) {
   anchors = [];
+  if (!previewPane) return;
   const els = previewEl.querySelectorAll("[data-line]");
   const baseTop = previewPane.getBoundingClientRect().top;
   els.forEach((el) => {
@@ -26,27 +29,28 @@ function editorTopLine(view) {
   return view.state.doc.lineAt(block.from).number;
 }
 
+// 找到「行号 <= 当前行」且最大的锚点（即当前编辑位置所属的上一标题/行），
+// 把预览滚动到该锚点顶部对齐，使左右两侧在该标题处对齐。
+function anchorForLine(line) {
+  if (!anchors.length) return null;
+  let a = anchors[0];
+  for (const x of anchors) {
+    if (x.line <= line) a = x;
+    else break;
+  }
+  return a;
+}
+
 function syncPreviewToEditor(view, previewPane) {
   if (!anchors.length) return;
   const line = editorTopLine(view);
-  let lo = anchors[0];
-  let hi = anchors[anchors.length - 1];
-  for (const a of anchors) {
-    if (a.line <= line) lo = a;
-    if (a.line >= line) {
-      hi = a;
-      break;
-    }
-  }
-  let targetTop;
-  if (hi.line === lo.line) targetTop = lo.top;
-  else {
-    const f = (line - lo.line) / (hi.line - lo.line);
-    targetTop = lo.top + f * (hi.top - lo.top);
-  }
-  previewPane.scrollTop = Math.max(0, targetTop - 8);
+  const a = anchorForLine(line);
+  if (!a) return;
+  previewPane.scrollTop = Math.max(0, a.top - 8);
 }
 
+// 预览滚动到某 y 位置时，找到其下方最近的锚点，把编辑器滚动到对应源行，
+// 并尽量让该行处于编辑器顶部，使两侧对齐。
 function syncEditorToPreview(view, previewPane) {
   if (!anchors.length) return;
   const y = previewPane.scrollTop + 8;
@@ -61,6 +65,17 @@ function syncEditorToPreview(view, previewPane) {
 
 export function setupScrollSync({ editor, previewPane, previewEl, debounce = 30 }) {
   const view = editor.view;
+
+  const rebuild = () => buildAnchors(previewEl, previewPane);
+
+  // 预览内容变化时（含图片异步加载完成）重建锚点
+  previewEl.addEventListener("preview:rendered", rebuild);
+  previewEl.addEventListener &&
+    new ResizeObserver(rebuild).observe(previewPane);
+  window.addEventListener("resize", () => {
+    clearTimeout(r1);
+    r1 = setTimeout(rebuild, 100);
+  });
 
   const obs = new MutationObserver(() => buildAnchors(previewEl, previewPane));
   obs.observe(previewEl, { childList: true, subtree: true });
@@ -86,5 +101,5 @@ export function setupScrollSync({ editor, previewPane, previewEl, debounce = 30 
     }, debounce);
   });
 
-  return { rebuild: () => buildAnchors(previewEl, previewPane) };
+  return { rebuild };
 }
