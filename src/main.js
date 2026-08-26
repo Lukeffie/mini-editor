@@ -386,8 +386,9 @@ previewEl.addEventListener("click", async (e) => {
 initExplorer({ onOpenFile: openFile });
 const scrollSync = setupScrollSync({ editor, previewPane: $("preview-pane"), previewEl: $("preview") });
 
-// 文件关联（右键"打开方式"）启动时，Rust 端在 setup 阶段先把路径存入状态，
-// 前端就绪后再查询并打开（避免 setup 阶段 emit 时前端尚未监听而丢失）
+// 文件关联（右键"打开方式" / 双击）启动时：
+// 1) 首次启动由 Rust 在 setup 阶段把路径存入状态，前端就绪后查询并打开；
+// 2) 应用已在运行时再次双击文件，Rust 会 emit "open-path"，此处监听并打开。
 if (isTauri) {
   files
     .getLaunchPath()
@@ -395,6 +396,10 @@ if (isTauri) {
       if (p) openFile(p);
     })
     .catch((e) => console.error("读取启动路径失败", e));
+
+  import("@tauri-apps/api/event")
+    .then(({ listen }) => listen("open-path", (e) => openFile(e.payload)))
+    .catch((e) => console.error("open-path 监听失败", e));
 }
 
 // 预览渲染（含图片加载）完成后重建滚动锚点，避免左右滚动对不齐

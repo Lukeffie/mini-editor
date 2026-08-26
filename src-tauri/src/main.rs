@@ -3,6 +3,7 @@
 use rfd::FileDialog;
 use std::fs;
 use std::sync::Mutex;
+use tauri::Emitter;
 use tauri::Manager;
 use base64::Engine;
 
@@ -141,16 +142,17 @@ fn main() {
         ])
         .manage(Mutex::new(None::<String>))
         .setup(|app| {
-            // 通过文件关联（右键"打开方式"）启动时，Windows 会把文件路径作为命令行参数传入。
-            // 此时前端尚未加载、无法监听事件，因此先把路径存入状态，待前端就绪后再查询。
+            // 通过文件关联（双击/右键"打开方式"）启动时，Windows 会把文件路径作为命令行参数传入
+            // （可能是普通路径，也可能是 file:// 形式）。此时前端尚未加载、无法监听事件，
+            // 因此先把路径存入状态，待前端就绪后再查询；若窗口已存在（已运行时再次双击）则直接 emit。
             let state = app.state::<Mutex<Option<String>>>();
             let mut pending = state.lock().unwrap();
             for arg in std::env::args().skip(1) {
-                if arg.starts_with("--") {
-                    continue;
-                }
-                if std::path::Path::new(&arg).is_file() {
-                    *pending = Some(arg);
+                if let Some(p) = arg_to_path(&arg) {
+                    *pending = Some(p.clone());
+                    if let Some(win) = app.get_webview_window("main") {
+                        let _ = win.emit("open-path", p);
+                    }
                     break;
                 }
             }
@@ -158,4 +160,25 @@ fn main() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+// 将命令行参数 / 字符串转换为本地文件路径（兼容 file:// 形式与可能的 URL 编码），
+// 仅当该路径确实为已存在的文件时才返回 Some。
+fn arg_to_path(arg: &str) -> Option<String> {
+    if arg.starts_with("--") {
+        return None;
+    }
+    let decoded = if arg.starts_with("file://") {
+        match url::Url::parse(arg) {
+            Ok(u) => u.to_file_path().ok()?.to_string_lossy().to_string(),
+            Err(_) => return None,
+        }
+    } else {
+        arg.to_string()
+    };
+    if std::path::Path::new(&decoded).is_file() {
+        Some(decoded)
+    } else {
+        None
+    }
 }
