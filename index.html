@@ -157,7 +157,13 @@
 
         <!-- 编辑区 -->
         <main class="split" id="editor-area">
-          <div class="tabbar" id="tabbar"></div>
+          <div class="tabbar" id="tabbar">
+            <button class="tab-scroll-btn tab-scroll-left" id="tab-scroll-left" title="向左滚动" aria-label="向左滚动" hidden>&#10094;</button>
+            <div class="tab-list" id="tab-list"></div>
+            <button class="tab-scroll-btn tab-scroll-right" id="tab-scroll-right" title="向右滚动" aria-label="向右滚动" hidden>&#10095;</button>
+          </div>
+          <!-- 页签右键菜单 -->
+          <div class="ctx-menu" id="tab-ctx-menu" hidden></div>
           <div class="split-row">
             <section class="pane editor-pane" id="editor-pane">
               <div id="editor"></div>

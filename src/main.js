@@ -85,8 +85,10 @@ function schedulePreview(text) {
 }
 
 function onContentChange(text) {
+  if (suppressChange) return; // 程序化加载文件，不标记为未保存
   statusSaved.textContent = "未保存";
   statusChars.textContent = text.length + " 字符";
+  if (activeTab) setTabDirty(activeTab, true);
   schedulePreview(text);
   if (settings.autoSave && currentPath) {
     clearTimeout(autoSaveTimer);
@@ -144,6 +146,7 @@ setupSplit({
 const tabs = [];
 let activeTab = null;
 let tabSeq = 0;
+let suppressChange = false; // 程序化加载文件时抑制"未保存"标记
 const history = []; // 浏览历史（path 序列），用于前进 / 后退
 let histIndex = -1;
 
@@ -155,13 +158,18 @@ function updateNavButtons() {
 }
 
 function renderTabs() {
-  const bar = $("tabbar");
-  if (!bar) return;
-  bar.innerHTML = "";
+  const list = $("tab-list");
+  if (!list) return;
+  list.innerHTML = "";
   tabs.forEach((t) => {
     const el = document.createElement("div");
     el.className = "tab" + (t === activeTab ? " active" : "");
     el.title = t.path;
+    // 常驻透明圆点占位，修改后加 .on 显示，保存后去掉 .on 变透明（布局不跳动）
+    const dot = document.createElement("span");
+    dot.className = "tab-dot" + (t.dirty ? " on" : "");
+    dot.title = "未保存";
+    el.appendChild(dot);
     const name = document.createElement("span");
     name.className = "tab-name";
     name.textContent = t.path.split(/[\\/]/).pop();
@@ -176,8 +184,61 @@ function renderTabs() {
     });
     el.appendChild(close);
     el.addEventListener("click", () => switchToTab(t));
-    bar.appendChild(el);
+    el.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      showTabCtxMenu(t, e.clientX, e.clientY);
+    });
+    list.appendChild(el);
   });
+  updateTabScroll();
+}
+
+// 当 tab 列表超出可视宽度时显示左右滚动按钮，并按当前滚动位置启用/禁用
+function updateTabScroll() {
+  const list = $("tab-list");
+  const left = $("tab-scroll-left");
+  const right = $("tab-scroll-right");
+  if (!list || !left || !right) return;
+  const overflow = list.scrollWidth - list.clientWidth;
+  const show = overflow > 2;
+  left.hidden = !show;
+  right.hidden = !show;
+  if (show) {
+    left.disabled = list.scrollLeft <= 0;
+    right.disabled = list.scrollLeft >= overflow - 1;
+  }
+}
+
+// 点击滚动按钮移动 tab 列表
+function setupTabScrollButtons() {
+  const list = $("tab-list");
+  const left = $("tab-scroll-left");
+  const right = $("tab-scroll-right");
+  if (!list || !left || !right) return;
+  const step = () => Math.max(120, list.clientWidth * 0.8);
+  left.addEventListener("click", () => {
+    list.scrollLeft -= step();
+  });
+  right.addEventListener("click", () => {
+    list.scrollLeft += step();
+  });
+  list.addEventListener("scroll", updateTabScroll);
+  window.addEventListener("resize", updateTabScroll);
+}
+
+// 更新单个页签的未保存标记：圆点常驻，仅切换 .on 透明度，不影响 tab 布局
+function setTabDirty(t, v) {
+  if (!t || t.dirty === v) return;
+  t.dirty = v;
+  const list = $("tab-list");
+  const idx = tabs.indexOf(t);
+  const el = list && list.children[idx];
+  const dot = el && el.querySelector(".tab-dot");
+  if (dot) {
+    dot.classList.toggle("on", v);
+  } else {
+    renderTabs(); // 兜底：元素不存在时整体重建
+  }
 }
 
 // 切换到一个已存在的 tab：先保存当前编辑器内容，再加载目标 tab 的内容
@@ -186,11 +247,19 @@ function switchToTab(t) {
   if (activeTab) activeTab.content = editor.getContent();
   activeTab = t;
   currentPath = t.path;
+  suppressChange = true;
   editor.setContent(t.content != null ? t.content : "");
+  suppressChange = false;
   titleEl.textContent = "极简编辑器 — " + t.path.split(/[\\/]/).pop();
   statusSaved.textContent = "已打开";
   updateMode();
   renderTabs();
+  // 将当前页签滚动到可见区域
+  const list = $("tab-list");
+  const idx = tabs.indexOf(t);
+  if (list && list.children[idx]) {
+    list.children[idx].scrollIntoView({ inline: "nearest", block: "nearest" });
+  }
   updateNavButtons();
 }
 
@@ -227,7 +296,7 @@ function openFileInTab(path, { record = true, activate = true } = {}) {
   files
     .readFile(path)
     .then((txt) => {
-      const t = { id: ++tabSeq, path, content: txt };
+      const t = { id: ++tabSeq, path, content: txt, dirty: false };
       tabs.push(t);
       if (activate) switchToTab(t);
       else {
@@ -260,6 +329,115 @@ function closeTab(t) {
     }
   }
   renderTabs();
+}
+
+// 重新加载当前页签：从磁盘重新读取并刷新内容
+async function reloadTab(t) {
+  try {
+    const txt = await files.readFile(t.path);
+    t.content = txt;
+    if (activeTab === t) {
+      suppressChange = true;
+      editor.setContent(txt);
+      suppressChange = false;
+      updateMode();
+    }
+    setTabDirty(t, false);
+    renderTabs();
+    statusSaved.textContent = "已重新加载";
+  } catch (e) {
+    statusSaved.textContent = "重新加载失败";
+    console.error(e);
+  }
+}
+
+// 关闭除 target 外的所有页签
+function closeOtherTabs(target) {
+  for (let i = tabs.length - 1; i >= 0; i--) {
+    if (tabs[i] !== target) closeTab(tabs[i]);
+  }
+}
+
+// 关闭所有页签
+function closeAllTabs() {
+  for (let i = tabs.length - 1; i >= 0; i--) closeTab(tabs[i]);
+}
+
+// 关闭 target 左侧的所有页签
+function closeLeftTabs(target) {
+  const idx = tabs.indexOf(target);
+  for (let i = idx - 1; i >= 0; i--) closeTab(tabs[i]);
+}
+
+// 关闭 target 右侧的所有页签
+function closeRightTabs(target) {
+  const idx = tabs.indexOf(target);
+  for (let i = tabs.length - 1; i > idx; i--) closeTab(tabs[i]);
+}
+
+// 页签右键菜单
+let ctxTargetTab = null;
+function showTabCtxMenu(t, x, y) {
+  ctxTargetTab = t;
+  const menu = $("tab-ctx-menu");
+  if (!menu) return;
+  const items = [
+    { label: "重新加载", action: () => reloadTab(t) },
+    { sep: true },
+    { label: "关闭", action: () => closeTab(t) },
+    { label: "关闭其他页签", action: () => closeOtherTabs(t) },
+    { label: "关闭所有页签", action: () => closeAllTabs() },
+    { label: "关闭左侧页签", action: () => closeLeftTabs(t) },
+    { label: "关闭右侧页签", action: () => closeRightTabs(t) },
+  ];
+  menu.innerHTML = "";
+  items.forEach((it) => {
+    if (it.sep) {
+      const sep = document.createElement("div");
+      sep.className = "ctx-sep";
+      menu.appendChild(sep);
+      return;
+    }
+    const mi = document.createElement("div");
+    mi.className = "ctx-item";
+    mi.textContent = it.label;
+    mi.addEventListener("click", () => {
+      hideTabCtxMenu();
+      it.action();
+    });
+    menu.appendChild(mi);
+  });
+  menu.hidden = false;
+  // 防止菜单超出视口
+  const rect = menu.getBoundingClientRect();
+  const px = Math.min(x, window.innerWidth - rect.width - 4);
+  const py = Math.min(y, window.innerHeight - rect.height - 4);
+  menu.style.left = px + "px";
+  menu.style.top = py + "px";
+}
+function hideTabCtxMenu() {
+  const menu = $("tab-ctx-menu");
+  if (menu) menu.hidden = true;
+  ctxTargetTab = null;
+}
+
+// 点击菜单外部、滚动、按 Esc、或在别处右键时隐藏菜单
+function setupTabCtxMenu() {
+  const menu = $("tab-ctx-menu");
+  if (!menu) return;
+  document.addEventListener("click", (e) => {
+    if (!menu.hidden && !menu.contains(e.target)) hideTabCtxMenu();
+  });
+  document.addEventListener("contextmenu", (e) => {
+    // 在页签上右键由 showTabCtxMenu 处理；其他位置右键时隐藏旧菜单
+    if (e.target.closest && e.target.closest(".tab")) return;
+    if (!menu.hidden) hideTabCtxMenu();
+  });
+  window.addEventListener("blur", hideTabCtxMenu);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") hideTabCtxMenu();
+  });
+  menu.addEventListener("scroll", () => {}, { passive: true });
 }
 
 function pushHistory(path) {
@@ -385,6 +563,8 @@ previewEl.addEventListener("click", async (e) => {
 
 initExplorer({ onOpenFile: openFile });
 const scrollSync = setupScrollSync({ editor, previewPane: $("preview-pane"), previewEl: $("preview") });
+setupTabScrollButtons();
+setupTabCtxMenu();
 
 // 文件关联（右键"打开方式" / 双击）启动时：
 // 1) 首次启动由 Rust 在 setup 阶段把路径存入状态，前端就绪后查询并打开；
@@ -478,6 +658,7 @@ async function saveFile(path) {
   try {
     await files.writeFile(path, editor.getContent());
     currentPath = path;
+    if (activeTab) setTabDirty(activeTab, false);
     titleEl.textContent = "极简编辑器 — " + path.split(/[\\/]/).pop();
     statusSaved.textContent = "已保存";
   } catch (e) {
