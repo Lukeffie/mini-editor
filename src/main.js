@@ -85,7 +85,6 @@ function schedulePreview(text) {
 }
 
 function onContentChange(text) {
-  if (suppressChange) return; // 程序化加载文件，不标记为未保存
   statusSaved.textContent = "未保存";
   statusChars.textContent = text.length + " 字符";
   if (activeTab) setTabDirty(activeTab, true);
@@ -146,7 +145,6 @@ setupSplit({
 const tabs = [];
 let activeTab = null;
 let tabSeq = 0;
-let suppressChange = false; // 程序化加载文件时抑制"未保存"标记
 const history = []; // 浏览历史（path 序列），用于前进 / 后退
 let histIndex = -1;
 
@@ -247,9 +245,7 @@ function switchToTab(t) {
   if (activeTab) activeTab.content = editor.getContent();
   activeTab = t;
   currentPath = t.path;
-  suppressChange = true;
   editor.setContent(t.content != null ? t.content : "");
-  suppressChange = false;
   titleEl.textContent = "极简编辑器 — " + t.path.split(/[\\/]/).pop();
   statusSaved.textContent = "已打开";
   updateMode();
@@ -337,10 +333,9 @@ async function reloadTab(t) {
     const txt = await files.readFile(t.path);
     t.content = txt;
     if (activeTab === t) {
-      suppressChange = true;
       editor.setContent(txt);
-      suppressChange = false;
-      updateMode();
+      updateMode(); // 重新检测模式并刷新预览
+      schedulePreview(editor.getContent()); // 显式刷新预览，确保重新加载后立即生效
     }
     setTabDirty(t, false);
     renderTabs();
