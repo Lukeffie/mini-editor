@@ -383,6 +383,7 @@ function showTabCtxMenu(t, x, y) {
   if (!menu) return;
   const items = [
     { label: "重新加载", action: () => reloadTab(t) },
+    { label: "在新窗口中打开", action: () => files.openInNewWindow(t.path) },
     { sep: true },
     { label: "关闭", action: () => closeTab(t) },
     { label: "关闭其他页签", action: () => closeOtherTabs(t) },

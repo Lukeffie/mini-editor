@@ -36,6 +36,12 @@ export async function getLaunchPath() {
   return null;
 }
 
+// 在新窗口中打开文件（仅 Tauri）：以当前程序加文件路径再启动一个实例
+export async function openInNewWindow(path) {
+  if (isTauri) return await invoke("open_in_new_window", { path });
+  throw new Error("当前环境不支持在新窗口中打开");
+}
+
 export async function writeFile(path, content) {
   if (isTauri) return await invoke("write_file", { path, content });
   throw new Error("当前环境不支持文件写入");

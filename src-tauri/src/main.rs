@@ -127,6 +127,18 @@ fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
     Ok(entries)
 }
 
+/// 在新窗口中打开文件：复用应用自身的命令行参数处理逻辑（setup 中已支持文件路径参数），
+/// 直接以当前可执行文件 + 文件路径作为参数再启动一个实例。
+#[tauri::command]
+fn open_in_new_window(path: String) -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    std::process::Command::new(exe)
+        .arg(path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -138,7 +150,8 @@ fn main() {
             open_in_system,
             open_directory,
             list_directory,
-            get_launch_path
+            get_launch_path,
+            open_in_new_window
         ])
         .manage(Mutex::new(None::<String>))
         .setup(|app| {
