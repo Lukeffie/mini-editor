@@ -1,6 +1,5 @@
 import { createEditor } from "./editor.js";
 import { render, detectMode } from "./preview.js";
-import { EditorView } from "codemirror";
 import { setupSplit } from "./split.js";
 import { loadSettings, saveSettings } from "./settings.js";
 import * as files from "./files.js";
@@ -9,6 +8,7 @@ import "highlight.js/styles/github.css";
 import "./style.css";
 import { initExplorer } from "./explorer.js";
 import { setupScrollSync } from "./scrollsync.js";
+import { findHighlight, setupFindReplace } from "./findreplace.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -30,12 +30,16 @@ let currentPath = null;
 let currentMode = "md";
 let previewTimer = null;
 let autoSaveTimer = null;
+let loadingGuard = false; // 程序化加载文件时为真，期间不标记"未保存"/不触发自动保存
 
 const editor = createEditor($("editor"), {
   initialDoc:
     "# 欢迎使用极简编辑器\n\n左边编辑，右边实时预览。\n\n- 支持 **Markdown** 渲染\n- 支持 HTML 预览（沙箱隔离）\n- 左侧可「打开目录」批量管理文件\n- 快捷键：Ctrl+S 保存，Ctrl+O 打开\n",
   onChange: (text) => onContentChange(text),
+  extraExtensions: findHighlight,
 });
+
+let findReplace = null;
 
 function applySettings() {
   editorPane.style.flexBasis = settings.ratio + "%";
@@ -85,10 +89,13 @@ function schedulePreview(text) {
 }
 
 function onContentChange(text) {
-  statusSaved.textContent = "未保存";
+  // 实时预览始终执行（这是修复"左边改右边不实时更新"的关键）
   statusChars.textContent = text.length + " 字符";
-  if (activeTab) setTabDirty(activeTab, true);
   schedulePreview(text);
+  // 程序化加载（打开/切换/重新加载文件）期间不标记"未保存"、不触发自动保存
+  if (loadingGuard) return;
+  statusSaved.textContent = "未保存";
+  if (activeTab) setTabDirty(activeTab, true);
   if (settings.autoSave && currentPath) {
     clearTimeout(autoSaveTimer);
     autoSaveTimer = setTimeout(() => saveFile(currentPath), 800);
@@ -245,7 +252,9 @@ function switchToTab(t) {
   if (activeTab) activeTab.content = editor.getContent();
   activeTab = t;
   currentPath = t.path;
+  loadingGuard = true;
   editor.setContent(t.content != null ? t.content : "");
+  loadingGuard = false;
   titleEl.textContent = "极简编辑器 — " + t.path.split(/[\\/]/).pop();
   statusSaved.textContent = "已打开";
   updateMode();
@@ -333,7 +342,9 @@ async function reloadTab(t) {
     const txt = await files.readFile(t.path);
     t.content = txt;
     if (activeTab === t) {
+      loadingGuard = true;
       editor.setContent(txt);
+      loadingGuard = false;
       updateMode(); // 重新检测模式并刷新预览
       schedulePreview(editor.getContent()); // 显式刷新预览，确保重新加载后立即生效
     }
@@ -470,7 +481,9 @@ function openDroppedFile(file) {
   const reader = new FileReader();
   reader.onload = () => {
     currentPath = null; // 拖入文件无本地路径，保存时按另存处理
+    loadingGuard = true;
     editor.setContent(reader.result);
+    loadingGuard = false;
     titleEl.textContent = "极简编辑器 — " + file.name;
     statusSaved.textContent = "已打开（拖入）";
     updateMode();
@@ -579,7 +592,11 @@ if (isTauri) {
 }
 
 // 预览渲染（含图片加载）完成后重建滚动锚点，避免左右滚动对不齐
-previewEl.addEventListener("preview:rendered", () => scrollSync && scrollSync.rebuild());
+previewEl.addEventListener("preview:rendered", () => {
+  if (scrollSync) scrollSync.rebuild();
+  // 预览重渲染后文本节点失效，正在预览区查找时重算匹配
+  if (findReplace) findReplace.refresh();
+});
 
 // 点击预览中的标题，把编辑器滚动到对应的源文件行（标题作为锚点）
 previewEl.addEventListener("click", (e) => {
@@ -595,11 +612,8 @@ previewEl.addEventListener("click", (e) => {
   if (!lineAttr) return;
   const line = parseInt(lineAttr, 10);
   if (isNaN(line)) return;
-  const ln = Math.min(line, editor.view.state.doc.lines);
-  const lineObj = editor.view.state.doc.line(ln);
-  editor.view.dispatch({
-    effects: EditorView.scrollIntoView(lineObj.from, { y: "start" }),
-  });
+  // 用带同步守卫的方式跳转，避免随后的反向同步把预览"闪"回去
+  scrollSync.scrollEditorToLine(line);
   editor.view.focus();
 });
 
@@ -643,6 +657,14 @@ $("auto-save").addEventListener("change", (e) => {
   saveSettings(settings);
 });
 
+// ---- 查找 / 替换面板（顶部浮动条，替换 CodeMirror 自带的底部小面板） ----
+// 编辑框可见时搜编辑器，预览视图（编辑框隐藏）时自动改搜预览区
+findReplace = setupFindReplace(editor.view, $("find-bar"), {
+  previewEl: $("preview"),
+  previewPane: $("preview-pane"),
+  isPreviewActive: () => currentView === "preview",
+});
+
 // 初始化：确保所有 DOM 元素已赋值后再应用设置/模式/视图
 applySettings();
 updateMode();
@@ -680,6 +702,42 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
+// 查找 / 替换快捷键。
+// 用捕获阶段监听，确保在 CodeMirror 自己的 Mod-f / Mod-g / F3 之前拦下，
+// 否则 basicSetup 自带的底部搜索面板会被打开。
+window.addEventListener(
+  "keydown",
+  (e) => {
+    if (!findReplace) return;
+    const k = e.key.toLowerCase();
+    const mod = e.ctrlKey || e.metaKey;
+    const open = findReplace.isOpen();
+
+    if (mod && k === "f") {
+      e.preventDefault();
+      e.stopPropagation();
+      findReplace.open("find");
+      return;
+    }
+    if (mod && k === "h") {
+      e.preventDefault();
+      e.stopPropagation();
+      // 面板已开着就只展开替换框，保留当前查询词与匹配位置
+      if (open) findReplace.expandReplace();
+      else findReplace.open("replace");
+      return;
+    }
+    // 面板打开时接管 Esc / F3 / Ctrl+G，避免触发 CodeMirror 自带搜索
+    if (open && (e.key === "Escape" || e.key === "F3" || (mod && k === "g"))) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Escape") findReplace.close();
+      else findReplace.step(e.shiftKey ? -1 : 1);
+    }
+  },
+  true
+);
+
 // ---- 视图切换：编辑 / 分栏 / 预览 ----
 let currentView = "split";
 function updateViewSwitch() {
@@ -700,6 +758,8 @@ function setView(view) {
     editorPane.style.flexBasis = settings.ratio + "%";
   }
   editor.refresh();
+  // 编辑框显隐会改变查找目标（编辑器 / 预览区），刷新一下已打开的查找条
+  if (findReplace) findReplace.refresh();
 }
 
 // ---- 文件树显示 / 隐藏（折叠为左侧窄工具栏，不全隐藏） ----
@@ -737,7 +797,9 @@ function zoom(delta) {
 // ---- 菜单栏动作分发 ----
 const menuActions = {
   "new": () => {
+    loadingGuard = true;
     editor.setContent("");
+    loadingGuard = false;
     currentPath = null;
     titleEl.textContent = "极简编辑器 — 未命名";
     statusSaved.textContent = "就绪";

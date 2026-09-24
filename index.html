@@ -174,6 +174,33 @@
               <iframe id="preview-frame" class="preview-frame" sandbox="allow-scripts" hidden></iframe>
             </section>
           </div>
+
+          <!-- 查找 / 替换：浮动在编辑区顶部右侧，Chrome 风格。
+               放在 .split 内而非 editor-pane 内，这样预览视图（编辑框隐藏）也能用。 -->
+          <div class="find-bar" id="find-bar" hidden>
+            <div class="find-row">
+              <input id="find-input" class="find-input" type="text" placeholder="查找" autocomplete="off" spellcheck="false" aria-label="查找">
+              <button class="find-btn" id="find-toggle" title="展开替换框 (Ctrl+H)" aria-label="展开替换框" aria-expanded="false">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <span class="find-count" id="find-count"></span>
+              <button class="find-btn" id="find-prev" title="上一个匹配项 (Shift+Enter)" aria-label="上一个匹配项">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+              </button>
+              <button class="find-btn" id="find-next" title="下一个匹配项 (Enter)" aria-label="下一个匹配项">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <button class="find-btn" id="find-close" title="关闭 (Esc)" aria-label="关闭">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div class="find-row" id="replace-row" hidden>
+              <input id="replace-input" class="find-input" type="text" placeholder="替换为" autocomplete="off" spellcheck="false" aria-label="替换为">
+              <button class="find-btn wide" id="replace-one" title="替换当前匹配项 (Enter)">替换</button>
+              <button class="find-btn wide" id="replace-all" title="替换全部匹配项">全部</button>
+            </div>
+            <div class="find-hint" id="find-hint" hidden></div>
+          </div>
         </main>
       </div>
 

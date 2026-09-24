@@ -29,38 +29,74 @@ function editorTopLine(view) {
   return view.state.doc.lineAt(block.from).number;
 }
 
-// 找到「行号 <= 当前行」且最大的锚点（即当前编辑位置所属的上一标题/行），
-// 把预览滚动到该锚点顶部对齐，使左右两侧在该标题处对齐。
-function anchorForLine(line) {
-  if (!anchors.length) return null;
-  let a = anchors[0];
-  for (const x of anchors) {
-    if (x.line <= line) a = x;
-    else break;
-  }
-  return a;
-}
-
+// 在两个相邻锚点之间做线性插值，让同步滚动能连续跟踪，而不是只"跳"到标题顶部。
+// 这样在一段标题内部滚动时，左右两侧也能保持对齐（解决"对不上"）。
 function syncPreviewToEditor(view, previewPane) {
   if (!anchors.length) return;
   const line = editorTopLine(view);
-  const a = anchorForLine(line);
-  if (!a) return;
-  previewPane.scrollTop = Math.max(0, a.top - 8);
+  let target;
+  if (line <= anchors[0].line) {
+    // 当前行在第一条锚点之前：从预览顶部按行比例推算
+    const f = anchors[0].line > 1 ? (line - 1) / (anchors[0].line - 1) : 0;
+    target = anchors[0].top * f;
+  } else {
+    let a = anchors[0];
+    let b = null;
+    for (const x of anchors) {
+      if (x.line <= line) a = x;
+      else { b = x; break; }
+    }
+    if (!b) target = a.top;
+    else {
+      const span = b.line - a.line || 1;
+      const f = (line - a.line) / span;
+      target = a.top + (b.top - a.top) * f;
+    }
+  }
+  const max = previewPane.scrollHeight - previewPane.clientHeight;
+  previewPane.scrollTop = Math.max(0, Math.min(target - 8, max < 0 ? 0 : max));
 }
 
-// 预览滚动到某 y 位置时，找到其下方最近的锚点，把编辑器滚动到对应源行，
-// 并尽量让该行处于编辑器顶部，使两侧对齐。
+// 预览滚动到某 y 位置时，在相邻锚点之间插值出对应的源行号，把编辑器滚动到该行，
+// 使两侧尽量对齐，而不是只对齐到最近的标题。
 function syncEditorToPreview(view, previewPane) {
   if (!anchors.length) return;
   const y = previewPane.scrollTop + 8;
-  let cur = anchors[0];
-  for (const a of anchors) if (a.top <= y) cur = a;
-  const line = Math.min(cur.line, view.state.doc.lines);
-  const lineObj = view.state.doc.line(line);
+  let line;
+  if (y <= anchors[0].top) {
+    const f = anchors[0].top > 0 ? y / anchors[0].top : 0;
+    line = Math.max(1, Math.round(1 + (anchors[0].line - 1) * f));
+  } else {
+    let a = anchors[0];
+    let b = null;
+    for (const x of anchors) {
+      if (x.top <= y) a = x;
+      else { b = x; break; }
+    }
+    if (!b) line = a.line;
+    else {
+      const span = b.top - a.top || 1;
+      const f = (y - a.top) / span;
+      line = Math.round(a.line + (b.line - a.line) * f);
+    }
+  }
+  const ln = Math.min(line, view.state.doc.lines);
+  const lineObj = view.state.doc.line(ln);
   view.dispatch({
     effects: EditorView.scrollIntoView(lineObj.from, { y: "start" }),
   });
+}
+
+// 点击预览标题跳到源码时调用：滚动编辑器到目标行，但置位 syncing 守卫，
+// 阻止随之而来的 preview→editor 反向同步把预览"闪"回去（解决点击闪滚）。
+function scrollEditorToLine(line) {
+  const ln = Math.min(Math.max(line, 1), view.state.doc.lines);
+  const lineObj = view.state.doc.line(ln);
+  syncing = true;
+  view.dispatch({
+    effects: EditorView.scrollIntoView(lineObj.from, { y: "start" }),
+  });
+  setTimeout(() => (syncing = false), 80);
 }
 
 export function setupScrollSync({ editor, previewPane, previewEl, debounce = 30 }) {
@@ -101,5 +137,5 @@ export function setupScrollSync({ editor, previewPane, previewEl, debounce = 30 
     }, debounce);
   });
 
-  return { rebuild };
+  return { rebuild, scrollEditorToLine };
 }

@@ -359,11 +359,11 @@ body {
 .file-list li .close:hover { opacity: 1; }
 
 /* ---------- 分栏 ---------- */
-.split { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
+.split { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; position: relative; }
 .split-row { display: flex; flex: 1; min-height: 0; min-width: 0; }
 .pane { min-width: 0; overflow: hidden; }
 .editor-pane {
-  flex: 0 0 auto; flex-basis: 50%; display: flex;
+  flex: 0 0 auto; flex-basis: 50%; display: flex; position: relative;
   border-right: 1px solid var(--border);
   min-width: 0;
 }
@@ -371,6 +371,68 @@ body {
 .cm-editor { height: 100%; font-size: var(--editor-font); }
 /* 常驻 gutter：横向滚动条固定在编辑器底边，纵向滚动时也不会消失 */
 .cm-scroller { overflow: auto; scrollbar-gutter: stable; }
+
+/* ---------- 查找 / 替换：页面顶部浮动条（Chrome 风格） ---------- */
+.find-bar {
+  /* 挂在 .split 上，位于页签栏(34px)下方；预览视图下编辑框隐藏也不受影响 */
+  position: absolute; top: 44px; right: 16px; z-index: 30;
+  width: 336px; max-width: calc(100% - 32px); box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px; border-radius: var(--radius);
+  background: var(--bg); border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow); font-size: 12px; color: var(--text);
+}
+.find-bar[hidden] { display: none; }
+.find-row { display: flex; align-items: center; gap: 4px; }
+.find-input {
+  flex: 1; min-width: 0; height: 26px; padding: 0 8px;
+  border: 1px solid var(--border-strong); border-radius: 5px;
+  background: var(--bg-2); color: var(--text);
+  font-family: inherit; font-size: inherit; outline: none;
+}
+.find-input::placeholder { color: var(--text-2); }
+.find-input:focus { border-color: var(--accent); }
+.find-input.no-match { border-color: #e5484d; }
+.find-count {
+  flex: none; min-width: 54px; text-align: center; color: var(--text-2);
+  font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden;
+}
+.find-count.none { color: #e5484d; }
+.find-btn {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  height: 26px; min-width: 26px; padding: 0 4px;
+  border: 1px solid transparent; border-radius: 5px;
+  background: transparent; color: var(--text-2);
+  font-family: inherit; font-size: inherit; cursor: pointer;
+}
+.find-btn:hover { background: var(--bg-3); color: var(--text); }
+.find-btn.wide { padding: 0 10px; }
+.find-row[hidden] { display: none; }
+/* 预览区查找时的说明行 */
+.find-hint {
+  padding: 0 2px; color: var(--text-2); font-size: 11px; line-height: 1.5;
+}
+.find-hint[hidden] { display: none; }
+/* 展开替换框后，展开箭头向上翻转 */
+.find-btn.expanded svg { transform: rotate(180deg); }
+.find-btn:disabled { opacity: .4; cursor: default; }
+.find-btn:disabled:hover { background: transparent; color: var(--text-2); }
+.find-btn svg { display: block; }
+
+/* CodeMirror 内置搜索面板已被顶部查找条取代，这里兜底隐藏，避免两套 UI 打架 */
+.cm-panels { display: none !important; }
+
+/* 预览区查找：用原生 Selection 标记当前匹配项，配色对齐 Chrome */
+.preview ::selection,
+.preview::selection { background: rgba(255, 145, 0, .62); color: var(--text); }
+
+/* 匹配项高亮：全部浅黄，当前项橙色（同 Chrome） */
+.cm-find-match { background: rgba(255, 214, 0, .38); border-radius: 2px; }
+.cm-find-match.cm-find-active {
+  background: rgba(255, 145, 0, .62);
+  box-shadow: 0 0 0 1px rgba(190, 100, 0, .55);
+  border-radius: 2px;
+}
 
 /* 可拖拽分隔条 */
 .divider {
@@ -524,6 +586,41 @@ body {
   background: var(--bg-3); padding: 14px 16px; border-radius: 10px; overflow: auto; scrollbar-gutter: stable;
 }
 .markdown-body pre code { background: transparent; padding: 0; }
+
+/* ---------- 代码块容器：语言小标题 + 一键复制 ---------- */
+.code-wrap {
+  margin: .9em 0; border: 1px solid var(--border); border-radius: 10px;
+  overflow: hidden; background: var(--bg-3); font-size: 13.6px;
+}
+.code-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 5px 8px 5px 12px; border-bottom: 1px solid var(--border);
+  background: var(--bg-2); user-select: none; line-height: 1.4;
+}
+.code-lang {
+  font-size: 11.5px; font-weight: 600; letter-spacing: .5px;
+  color: var(--text-2); text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.code-copy {
+  flex: none; display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); color: var(--text-2); font-size: 11.5px;
+  font-family: inherit; cursor: pointer; transition: background .15s, color .15s, border-color .15s;
+}
+.code-copy:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.code-copy.copied { color: #2ea043; border-color: #2ea043; }
+.code-copy svg { display: block; }
+
+/* 容器内的 pre 去掉自身底色/圆角，避免与外层容器描边叠加 */
+.code-wrap > pre,
+.markdown-body .code-wrap pre,
+.preview .code-wrap pre {
+  margin: 0; padding: 12px 14px; border: 0; border-radius: 0;
+  background: transparent; overflow: auto; scrollbar-gutter: stable;
+}
+.code-wrap pre code,
+.markdown-body .code-wrap pre code { background: transparent; padding: 0; }
 .markdown-body blockquote {
   border-left: 3px solid var(--accent); margin: .7em 0;
   padding: .3em 0 .3em 14px; color: var(--text-2); background: var(--bg-2);
@@ -641,6 +738,8 @@ body[data-style="mint"] .file-list li.active { box-shadow: 0 2px 10px rgba(46, 1
 body[data-style="mint"] .divider::after { width: 3px; background: var(--accent); }
 body[data-style="mint"] .preview pre,
 body[data-style="mint"] .markdown-body code { background: color-mix(in srgb, var(--accent) 10%, var(--bg-3)); }
+body[data-style="mint"] .code-wrap { background: color-mix(in srgb, var(--accent) 10%, var(--bg-3)); }
+body[data-style="mint"] .code-wrap pre { background: transparent; }
 body[data-style="mint"] ::-webkit-scrollbar-thumb { background: var(--accent); }
 
 /* ——— 高饱和撞色：实色硬朗描边、撞色（橙）点缀 ——— */
@@ -680,6 +779,10 @@ body[data-style="cyber"] .markdown-body h2 { border-bottom: 1px solid var(--neon
 body[data-style="cyber"] .markdown-body blockquote { border-left-color: var(--neon-cyan); }
 body[data-style="cyber"] .preview pre,
 body[data-style="cyber"] .markdown-body code { background: #0c0c18; border: 1px solid var(--neon-cyan); }
+body[data-style="cyber"] .code-wrap { background: #0c0c18; border: 1px solid var(--neon-cyan); box-shadow: 0 0 6px rgba(0, 240, 255, .25); }
+body[data-style="cyber"] .code-head { background: #14142a; border-bottom: 1px solid var(--neon-cyan); }
+body[data-style="cyber"] .code-lang { color: var(--neon-cyan); }
+body[data-style="cyber"] .code-wrap pre { background: transparent; border: 0; }
 body[data-style="cyber"] ::-webkit-scrollbar-thumb { background: var(--neon-cyan); box-shadow: 0 0 6px var(--neon-cyan); }
 
 /* ——— 复古古典：纸感细棕描边、虚线、书本硬阴影 ——— */

@@ -196,6 +196,7 @@ export async function render(previewEl, iframeEl, content, mode, filePath) {
     return;
   }
 
+
   // markdown
   previewEl.innerHTML = marked.parse(content);
   // 把相对图片路径解析为可加载地址（基于当前文档目录）
@@ -211,8 +212,140 @@ export async function render(previewEl, iframeEl, content, mode, filePath) {
       hljs.highlightElement(b);
     } catch (_) {}
   });
+  decorateCodeBlocks(previewEl);
   annotateMarkdown(previewEl, content);
   notifyRendered(previewEl);
+}
+
+// ===== 代码块：语言标签 + 一键复制 =====
+
+// 常见语言 → 更友好的显示名
+const LANG_LABELS = {
+  js: "JavaScript", javascript: "JavaScript", jsx: "JSX", mjs: "JavaScript",
+  ts: "TypeScript", typescript: "TypeScript", tsx: "TSX",
+  json: "JSON", jsonc: "JSON", html: "HTML", htm: "HTML", xml: "XML",
+  css: "CSS", scss: "SCSS", sass: "Sass", less: "Less",
+  bash: "Bash", sh: "Shell", shell: "Shell", zsh: "Shell",
+  powershell: "PowerShell", ps1: "PowerShell", bat: "Batch", cmd: "Batch",
+  py: "Python", python: "Python", py3: "Python",
+  java: "Java", kotlin: "Kotlin", kt: "Kotlin", swift: "Swift",
+  c: "C", h: "C", cpp: "C++", cc: "C++", cxx: "C++", hpp: "C++",
+  cs: "C#", csharp: "C#", go: "Go", golang: "Go",
+  rust: "Rust", rs: "Rust", ruby: "Ruby", rb: "Ruby", php: "PHP",
+  sql: "SQL", graphql: "GraphQL", gql: "GraphQL",
+  yaml: "YAML", yml: "YAML", toml: "TOML", ini: "INI",
+  md: "Markdown", markdown: "Markdown", mdx: "MDX",
+  diff: "Diff", patch: "Diff", dockerfile: "Dockerfile", docker: "Dockerfile",
+  makefile: "Makefile", mk: "Makefile", lua: "Lua", r: "R", dart: "Dart",
+  scala: "Scala", perl: "Perl", vb: "VB", text: "文本", txt: "文本", plaintext: "文本",
+};
+
+// 从 <code> 的 class（language-xx / lang-xx）推断语言显示名
+function codeLangLabel(codeEl) {
+  let token = "";
+  if (codeEl) {
+    for (const c of Array.from(codeEl.classList)) {
+      const m = /^(?:language-|lang-)(.+)$/.exec(c);
+      if (m) { token = m[1]; break; }
+    }
+  }
+  if (!token) return "代码";
+  const key = token.toLowerCase();
+  if (LANG_LABELS[key]) return LANG_LABELS[key];
+  const s = token.replace(/[_-]/g, " ").trim();
+  return s.length <= 5 ? s.toUpperCase() : s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// 复制文本：优先 clipboard API，失败时回退到 execCommand（兼容 WebView 环境）
+async function writeClipboard(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (_) {}
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.top = "-1000px";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  } catch (_) {
+    return false;
+  }
+}
+
+const COPY_ICON =
+  '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<rect x="9" y="9" width="12" height="12" rx="2"/>' +
+  '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+const OK_ICON =
+  '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<polyline points="20 6 9 17 4 12"/></svg>';
+
+// 给预览里每个代码块套一层容器：顶部小标题（语言名）+ 右上角复制按钮。
+// 幂等，重复渲染同一份 HTML 时不会重复包裹。
+function decorateCodeBlocks(previewEl) {
+  const blocks = Array.from(previewEl.querySelectorAll("pre"));
+  for (const pre of blocks) {
+    // 已包裹过则跳过（同时跳过纯文本模式的 .raw 展示）
+    if (pre.parentElement && pre.parentElement.classList.contains("code-wrap")) continue;
+    if (pre.classList.contains("raw")) continue;
+
+    const codeEl = pre.querySelector("code");
+    const lbl = codeLangLabel(codeEl);
+    const wrap = document.createElement("div");
+    wrap.className = "code-wrap";
+
+    const head = document.createElement("div");
+    head.className = "code-head";
+
+    const lang = document.createElement("span");
+    lang.className = "code-lang";
+    lang.textContent = lbl;
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "code-copy";
+    btn.title = "复制代码";
+    btn.setAttribute("aria-label", "复制代码");
+    btn.innerHTML = COPY_ICON + '<span class="code-copy-txt">复制</span>';
+
+    let timer = 0;
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const src = codeEl || pre;
+      // 复制原始代码文本（不含标题/按钮），保留真实换行
+      const text = (src.textContent || "").replace(/\n$/, "");
+      const ok = await writeClipboard(text);
+      clearTimeout(timer);
+      if (ok) {
+        btn.classList.add("copied");
+        btn.innerHTML = OK_ICON + '<span class="code-copy-txt">已复制</span>';
+        timer = setTimeout(() => {
+          btn.classList.remove("copied");
+          btn.innerHTML = COPY_ICON + '<span class="code-copy-txt">复制</span>';
+        }, 1600);
+      } else {
+        btn.innerHTML = COPY_ICON + '<span class="code-copy-txt">复制失败</span>';
+        timer = setTimeout(() => {
+          btn.innerHTML = COPY_ICON + '<span class="code-copy-txt">复制</span>';
+        }, 1600);
+      }
+    });
+
+    head.append(lang, btn);
+    pre.parentNode.insertBefore(wrap, pre);
+    wrap.append(head, pre);
+  }
 }
 
 // JSON / XML 格式化 + 语法高亮预览
@@ -258,6 +391,7 @@ function renderData(previewEl, content, mode) {
       if (hljs.getLanguage(lang)) hljs.highlightElement(block);
     } catch (_) {}
   }
+  decorateCodeBlocks(previewEl);
 }
 
 // 轻量 XML 美化：按标签断行并缩进
