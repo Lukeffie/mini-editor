@@ -122,9 +122,31 @@ function annotateMarkdown(previewEl, content) {
   });
 }
 
-// 渲染（含图片异步加载）完成后通知，供滚动联动重建锚点，避免图片加载后布局变化导致左右对不齐
-function notifyRendered(previewEl) {
-  previewEl.dispatchEvent(new CustomEvent("preview:rendered"));
+// 渲染（含图片异步加载）完成后通知，供滚动联动重建锚点，避免图片加载后布局变化导致左右对不齐。
+// detail 携带本次重绘的滚动保持结果：preserved 表示位置保住了，clamped 表示内容变短被夹回。
+// 滚动联动据此决定是否需要重新定位——位置没丢就不许动，否则每敲一个字预览都会跳一下。
+function notifyRendered(previewEl, detail) {
+  previewEl.dispatchEvent(new CustomEvent("preview:rendered", { detail }));
+}
+
+// 预览是整块 innerHTML 重绘的，重绘瞬间容器高度塌陷，scrollTop 会被浏览器归零，
+// 随后联动再把它滚回去，就形成了"每输入一次就抖一下"。
+// 这里在重绘前记住位置、重绘后立刻还原，让预览原地更新、纹丝不动。
+function beginScrollKeep(previewEl) {
+  const pane = previewEl.parentNode;
+  return pane ? pane.scrollTop : 0;
+}
+
+function endScrollKeep(previewEl, prev) {
+  const pane = previewEl.parentNode;
+  if (!pane) return { preserved: false, clamped: false };
+  const max = Math.max(0, pane.scrollHeight - pane.clientHeight);
+  const want = Math.min(prev, max);
+  pane.scrollTop = want;
+  const clamped = prev > max + 1;
+  // 原本就在顶部（无需保持）或还原成功，都算位置没丢
+  const preserved = prev <= 0 || Math.abs(pane.scrollTop - want) < 1;
+  return { preserved, clamped };
 }
 
 export async function render(previewEl, iframeEl, content, mode, filePath) {
@@ -143,7 +165,8 @@ export async function render(previewEl, iframeEl, content, mode, filePath) {
     if (loading) loading.style.display = "flex";
     iframeEl.onload = () => {
       if (loading) loading.style.display = "none";
-      notifyRendered(previewEl);
+      // HTML 模式由 iframe 自己滚动，预览容器没有内容可定位，标记为"位置没丢"
+      notifyRendered(previewEl, { preserved: true, clamped: false });
     };
     // 允许脚本执行（sandbox="allow-scripts"，不含 allow-same-origin，避免可逃逸沙箱警告），
     // 并注入内联错误捕获脚本：把脚本错误 / 资源加载失败直接显示在预览页顶部，
@@ -176,6 +199,7 @@ export async function render(previewEl, iframeEl, content, mode, filePath) {
 
   if (mode === "txt") {
     // 纯文本：逐行包成带 data-line 的 div，滚动联动可精确到行
+    const keepFrom = beginScrollKeep(previewEl);
     const lines = content.split("\n");
     previewEl.innerHTML =
       '<div class="raw">' +
@@ -186,18 +210,20 @@ export async function render(previewEl, iframeEl, content, mode, filePath) {
         )
         .join("") +
       "</div>";
-    notifyRendered(previewEl);
+    notifyRendered(previewEl, endScrollKeep(previewEl, keepFrom));
     return;
   }
 
   if (mode === "json" || mode === "xml" || mode === "yaml") {
+    const keepFrom = beginScrollKeep(previewEl);
     renderData(previewEl, content, mode);
-    notifyRendered(previewEl);
+    notifyRendered(previewEl, endScrollKeep(previewEl, keepFrom));
     return;
   }
 
 
   // markdown
+  const keepFrom = beginScrollKeep(previewEl);
   previewEl.innerHTML = marked.parse(content);
   // 把相对图片路径解析为可加载地址（基于当前文档目录）
   const imgs = Array.from(previewEl.querySelectorAll("img"));
@@ -214,7 +240,7 @@ export async function render(previewEl, iframeEl, content, mode, filePath) {
   });
   decorateCodeBlocks(previewEl);
   annotateMarkdown(previewEl, content);
-  notifyRendered(previewEl);
+  notifyRendered(previewEl, endScrollKeep(previewEl, keepFrom));
 }
 
 // ===== 代码块：语言标签 + 一键复制 =====

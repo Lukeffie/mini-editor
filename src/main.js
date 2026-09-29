@@ -255,6 +255,10 @@ function switchToTab(t) {
   loadingGuard = true;
   editor.setContent(t.content != null ? t.content : "");
   loadingGuard = false;
+  // 切换文档时预览要回到顶部。预览重绘是"保留滚动位置"的（避免输入时抖动），
+  // 所以这里必须显式归零，否则新文档会沿用上一个文档的滚动偏移。
+  const pane = $("preview-pane");
+  if (pane) pane.scrollTop = 0;
   titleEl.textContent = "极简编辑器 — " + t.path.split(/[\\/]/).pop();
   statusSaved.textContent = "已打开";
   updateMode();
@@ -274,7 +278,8 @@ const TEXT_EXTS = [
 ];
 
 // 打开文件为 tab。activate=false 时只登记 tab 不切换当前视图（用于链接点击，避免跳动）。
-function openFileInTab(path, { record = true, activate = true } = {}) {
+// forceNew：即使该文件已打开，也再开一个新页签（对应"在新页面中打开"）
+function openFileInTab(path, { record = true, activate = true, forceNew = false } = {}) {
   if (!path) return;
   // 不支持的二进制格式：交给系统默认程序打开，不尝试以文本读取
   const ext = (path.split(".").pop() || "").toLowerCase();
@@ -290,7 +295,7 @@ function openFileInTab(path, { record = true, activate = true } = {}) {
       });
     return;
   }
-  const existing = tabs.find((t) => t.path === path);
+  const existing = forceNew ? null : tabs.find((t) => t.path === path);
   if (existing) {
     if (activate && activeTab !== existing) switchToTab(existing);
     else renderTabs();
@@ -329,6 +334,8 @@ function closeTab(t) {
       switchToTab(tabs[Math.max(0, idx - 1)]);
     } else {
       editor.setContent("");
+      const pane2 = $("preview-pane");
+      if (pane2) pane2.scrollTop = 0;
       titleEl.textContent = "极简编辑器 — 未命名";
       updateMode();
     }
@@ -570,7 +577,10 @@ previewEl.addEventListener("click", async (e) => {
   }
 });
 
-initExplorer({ onOpenFile: openFile });
+initExplorer({
+  onOpenFile: openFile,
+  onOpenFileInNewPage: (p) => openFileInTab(p, { record: true, activate: true, forceNew: true }),
+});
 const scrollSync = setupScrollSync({ editor, previewPane: $("preview-pane"), previewEl: $("preview") });
 setupTabScrollButtons();
 setupTabCtxMenu();
@@ -591,9 +601,9 @@ if (isTauri) {
     .catch((e) => console.error("open-path 监听失败", e));
 }
 
-// 预览渲染（含图片加载）完成后重建滚动锚点，避免左右滚动对不齐
+// 预览渲染（含图片加载）完成后的处理。
+// 滚动锚点的重建与重新对齐已由 scrollsync 内部订阅该事件完成，这里不再重复调用。
 previewEl.addEventListener("preview:rendered", () => {
-  if (scrollSync) scrollSync.rebuild();
   // 预览重渲染后文本节点失效，正在预览区查找时重算匹配
   if (findReplace) findReplace.refresh();
 });

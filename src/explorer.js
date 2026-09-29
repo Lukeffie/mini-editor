@@ -4,16 +4,20 @@ import { SUPPORTED_EXT } from "./preview.js";
 
 let currentDir = null;
 let onOpenFile = null;
+let onOpenFileInNewPage = null;
 let els = {};
 
 export function initExplorer(opts) {
   onOpenFile = opts.onOpenFile;
+  onOpenFileInNewPage = opts.onOpenFileInNewPage;
   els = {
     list: document.getElementById("file-list"),
     dirPath: document.getElementById("dir-path"),
     btnOpenDir: document.getElementById("btn-open-dir"),
+    ctxMenu: document.getElementById("file-ctx-menu"),
   };
   els.btnOpenDir.addEventListener("click", pickDir);
+  setupFileCtxMenu();
 
   const saved = JSON.parse(localStorage.getItem("mini-editor-settings") || "{}");
   if (saved.lastDir) loadDir(saved.lastDir);
@@ -66,6 +70,9 @@ function renderList(entries, dir) {
     li.innerHTML = `<span class="ic">${ic}</span><span class="name"></span>`;
     li.querySelector(".name").textContent = e.name;
     li.title = e.path;
+    // 供右键菜单识别条目：data-path 存在即代表是一个文件/目录条目
+    li.dataset.path = e.path;
+    li.dataset.dir = e.is_dir ? "1" : "0";
     li.addEventListener("click", () => {
       if (e.is_dir) loadDir(e.path);
       else if (onOpenFile) onOpenFile(e.path);
@@ -84,6 +91,90 @@ function iconFor(name) {
   if (["png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "ico"].includes(ext)) return "🖼️";
   if (["css", "js", "ts", "rs", "py"].includes(ext)) return "⚙️";
   return "📄";
+}
+
+// ===== 文件树右键菜单 =====
+// 文件列表里任何位置都阻止 WebView 原生菜单（原生菜单里有"打印"等项），
+// 命中具体条目时才弹出应用内菜单。
+function setupFileCtxMenu() {
+  const menu = els.ctxMenu;
+  if (!menu) return;
+
+  els.list.addEventListener("contextmenu", (e) => {
+    e.preventDefault(); // 屏蔽原生菜单（含"打印"）
+    const li = e.target.closest && e.target.closest("li[data-path]");
+    if (!li) {
+      hideFileCtxMenu();
+      return;
+    }
+    showFileCtxMenu(
+      { path: li.dataset.path, is_dir: li.dataset.dir === "1" },
+      e.clientX,
+      e.clientY
+    );
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!menu.hidden && !menu.contains(e.target)) hideFileCtxMenu();
+  });
+  document.addEventListener("contextmenu", (e) => {
+    // 在文件列表上右键由上面的逻辑处理，其余位置隐藏旧菜单
+    if (e.target.closest && e.target.closest("#file-list")) return;
+    hideFileCtxMenu();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") hideFileCtxMenu();
+  });
+  window.addEventListener("blur", hideFileCtxMenu);
+  window.addEventListener("resize", hideFileCtxMenu);
+}
+
+function showFileCtxMenu(entry, x, y) {
+  const menu = els.ctxMenu;
+  const items = [];
+
+  if (entry.is_dir) {
+    items.push({ label: "打开", action: () => loadDir(entry.path) });
+  } else {
+    items.push({ label: "打开", action: () => onOpenFile && onOpenFile(entry.path) });
+    items.push({
+      label: "在新页面中打开",
+      // 即使该文件已经开着，也另开新页签（对应浏览器"在新标签页打开"）
+      action: () => onOpenFileInNewPage && onOpenFileInNewPage(entry.path),
+    });
+  }
+
+  items.forEach((it) => {
+    if (it.sep) {
+      const sep = document.createElement("div");
+      sep.className = "ctx-sep";
+      menu.appendChild(sep);
+      return;
+    }
+    const mi = document.createElement("div");
+    mi.className = "ctx-item";
+    mi.textContent = it.label;
+    mi.addEventListener("click", () => {
+      hideFileCtxMenu();
+      it.action();
+    });
+    menu.appendChild(mi);
+  });
+
+  menu.hidden = false;
+  // 先定位到左上角量出实际尺寸，再回夹到视口内，避免菜单超出屏幕被裁切
+  menu.style.left = "0px";
+  menu.style.top = "0px";
+  const r = menu.getBoundingClientRect();
+  menu.style.left = Math.max(4, Math.min(x, window.innerWidth - r.width - 4)) + "px";
+  menu.style.top = Math.max(4, Math.min(y, window.innerHeight - r.height - 4)) + "px";
+}
+
+function hideFileCtxMenu() {
+  const menu = els.ctxMenu;
+  if (!menu) return;
+  menu.hidden = true;
+  menu.innerHTML = "";
 }
 
 function parentDir(p) {

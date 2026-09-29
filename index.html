@@ -211,6 +211,10 @@
       </footer>
     </div>
 
+    <!-- 文件树右键菜单：屏蔽 WebView 原生菜单（含"打印"），改为应用内菜单。
+         position:fixed，放在 #app 根部以免被侧栏裁剪。 -->
+    <div class="ctx-menu" id="file-ctx-menu" hidden></div>
+
     <!-- 设置弹框 -->
     <dialog class="modal" id="settings-modal">
       <div class="modal-box">

@@ -453,7 +453,12 @@ body {
 .divider:active { background: color-mix(in srgb, var(--accent) 35%, var(--bg-3)); }
 
 /* 常驻 gutter：横向滚动条固定在预览区底边，纵向滚动时也不会消失 */
-.preview-pane { position: relative; flex: 1; overflow: auto; scrollbar-gutter: stable; background: var(--bg); }
+.preview-pane {
+  position: relative; flex: 1; overflow: auto; scrollbar-gutter: stable; background: var(--bg);
+  /* 关闭浏览器"滚动锚定"：预览是整块 innerHTML 重绘的，重绘后锚定节点不复存在，
+     浏览器自己挑的锚点会和脚本写入的 scrollTop 互相打架，表现为闪跳。 */
+  overflow-anchor: none;
+}
 .preview { padding: 20px 28px; line-height: 1.75; max-width: 960px; margin: 0 auto; }
 .preview-frame { width: 100%; height: 100%; border: 0; background: #fff; }
 
