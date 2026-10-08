@@ -13,6 +13,11 @@ import { Decoration, EditorView } from "@codemirror/view";
 // 匹配过多时截断，避免超大文档卡死
 const MAX_MATCHES = 20000;
 
+// 是否支持 CSS 自定义高亮（::highlight）。支持时用它标记预览区的当前匹配项：
+// 不改动 DOM、也不占用原生选区。不支持（旧版 WebView）时退回用选区标记。
+const SUPPORTS_HIGHLIGHT =
+  typeof CSS !== "undefined" && !!CSS.highlights && typeof Highlight !== "undefined";
+
 const setQueryEffect = StateEffect.define(); // payload: string
 const setIndexEffect = StateEffect.define(); // payload: number
 
@@ -248,7 +253,24 @@ function createPreviewBackend(previewEl, previewPane) {
     }
   }
 
-  // 用原生 Selection 高亮当前匹配项：不改动 DOM，不影响渲染结果
+  // 用 CSS 自定义高亮标记当前匹配项：不改动 DOM、不影响渲染结果
+  function setHighlight(r) {
+    if (!SUPPORTS_HIGHLIGHT || !r) return false;
+    CSS.highlights.set("find-match", new Highlight(r));
+    return true;
+  }
+
+  function clearHighlight() {
+    if (SUPPORTS_HIGHLIGHT) CSS.highlights.delete("find-match");
+    // 只有在兜底模式（我们确实占用了选区）下才清选区，避免误清用户自己的选中内容
+    const wasFallback = document.body.classList.contains("find-fallback");
+    document.body.classList.remove("find-fallback");
+    if (wasFallback) {
+      const sel = window.getSelection();
+      if (sel) sel.removeAllRanges();
+    }
+  }
+
   function scrollRangeIntoView(r) {
     const rect = r.getBoundingClientRect();
     if (!rect.height) return;
@@ -262,10 +284,14 @@ function createPreviewBackend(previewEl, previewPane) {
     index = ((i % matches.length) + matches.length) % matches.length;
     const r = rangeFor(matches[index]);
     if (!r) return;
-    const sel = window.getSelection();
-    if (sel) {
-      sel.removeAllRanges();
-      sel.addRange(r);
+    if (!setHighlight(r)) {
+      // 兜底：用原生选区标记，并挂上 find-fallback 让它显示为查找色
+      document.body.classList.add("find-fallback");
+      const sel = window.getSelection();
+      if (sel) {
+        sel.removeAllRanges();
+        sel.addRange(r);
+      }
     }
     if (scroll) scrollRangeIntoView(r);
   }
@@ -291,8 +317,7 @@ function createPreviewBackend(previewEl, previewPane) {
       index = 0;
       if (previewEl.hidden) return;
       if (!q) {
-        const sel = window.getSelection();
-        if (sel) sel.removeAllRanges();
+        clearHighlight();
         return;
       }
       collect();
@@ -341,8 +366,7 @@ function createPreviewBackend(previewEl, previewPane) {
       query = "";
       matches = [];
       index = 0;
-      const sel = window.getSelection();
-      if (sel) sel.removeAllRanges();
+      clearHighlight();
     },
 
     // 预览重渲染后文本节点全部失效，需要重新扫描；保持当前下标、不滚动
@@ -352,10 +376,7 @@ function createPreviewBackend(previewEl, previewPane) {
       collect();
       matches = findMatchesInText(text, query);
       if (matches.length) show(Math.min(keep, matches.length - 1), false);
-      else {
-        const sel = window.getSelection();
-        if (sel) sel.removeAllRanges();
-      }
+      else clearHighlight();
     },
   };
 }

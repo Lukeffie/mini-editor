@@ -15,6 +15,11 @@
   --border-strong: #e5e7eb;
   --accent: #0969da;
   --accent-2: #0550ae;
+  /* 强调色底上的文字色。每个主题单独配：深色强调色配白字，浅色强调色配深色字。
+     统一写死 #fff 会在暗色/薄荷/古典等主题下只有 1.7~3.8:1，完全看不清。 */
+  --accent-on: #ffffff;
+  --danger: #c42b1f;
+  --danger-on: #ffffff;
   --radius: 8px;
   --shadow: 0 6px 24px rgba(0, 0, 0, 0.10);
 }
@@ -31,6 +36,9 @@ body.dark:not([data-style]) {
   --border-strong: #33333b;
   --accent: #58a6ff;
   --accent-2: #3d8bcc;
+  --accent-on: #0d1117;
+  --danger: #ff6b6b;
+  --danger-on: #2a0a0a;
   --shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
 }
 
@@ -45,6 +53,9 @@ body[data-style="mint"] {
   --border-strong: #a8d9c5;
   --accent: #2ec4b6;
   --accent-2: #20a498;
+  --accent-on: #06231f;
+  --danger: #c42b1f;
+  --danger-on: #ffffff;
   --ui-font: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   --radius: 12px;
   --shadow: 0 8px 28px rgba(46, 196, 182, 0.14);
@@ -59,6 +70,9 @@ body[data-style="mint"].dark {
   --border-strong: #3f6156;
   --accent: #4cd9c0;
   --accent-2: #3ab8a8;
+  --accent-on: #06231f;
+  --danger: #ff6b6b;
+  --danger-on: #2a0a0a;
   --shadow: 0 8px 28px rgba(0, 0, 0, 0.40);
 }
 
@@ -74,6 +88,9 @@ body[data-style="vibrant"] {
   --accent: #165dff;
   --accent-2: #0047cc;
   --accent-alt: #ff7d00;
+  --accent-on: #ffffff;
+  --danger: #c42b1f;
+  --danger-on: #ffffff;
   --ui-font: "Segoe UI", system-ui, sans-serif;
   --radius: 8px;
   --shadow: 0 6px 22px rgba(22, 93, 255, 0.16);
@@ -89,6 +106,9 @@ body[data-style="vibrant"].dark {
   --accent: #4080ff;
   --accent-2: #2d66d9;
   --accent-alt: #ff9500;
+  --accent-on: #0a1024;
+  --danger: #ff6b6b;
+  --danger-on: #2a0a0a;
   --shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
 }
 
@@ -104,6 +124,9 @@ body[data-style="cyber"] {
   --accent: #d622b0;
   --accent-2: #b01890;
   --neon-cyan: #00b8c8;
+  --accent-on: #ffffff;
+  --danger: #c42b1f;
+  --danger-on: #ffffff;
   --ui-font: ui-monospace, "Cascadia Code", Consolas, monospace;
   --radius: 6px;
   --shadow: 0 0 18px rgba(255, 46, 212, 0.18);
@@ -119,6 +142,9 @@ body[data-style="cyber"].dark {
   --accent: #ff2ed4;
   --accent-2: #d622b0;
   --neon-cyan: #00f0ff;
+  --accent-on: #14041a;
+  --danger: #ff6b6b;
+  --danger-on: #2a0a0a;
   --shadow: 0 0 22px rgba(255, 46, 212, 0.30);
 }
 /* 赛博朋克：强调色发光 */
@@ -143,6 +169,9 @@ body[data-style="classic"] {
   --border-strong: #c4b088;
   --accent: #8b4513;
   --accent-2: #6d340f;
+  --accent-on: #ffffff;
+  --danger: #c42b1f;
+  --danger-on: #ffffff;
   --ui-font: "Source Serif Pro", Georgia, "思源宋体", serif;
   --radius: 4px;
   --shadow: 0 4px 16px rgba(58, 46, 31, 0.16);
@@ -157,6 +186,9 @@ body[data-style="classic"].dark {
   --border-strong: #665740;
   --accent: #d4a574;
   --accent-2: #b88a5a;
+  --accent-on: #231a10;
+  --danger: #ff6b6b;
+  --danger-on: #2a0a0a;
   --shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
 }
 /* 复古：引用斜体、标题点状虚线 */
@@ -175,6 +207,9 @@ body[data-style="ink"] {
   --border-strong: #b8b8b0;
   --accent: #c23a30;
   --accent-2: #9e2d25;
+  --accent-on: #ffffff;
+  --danger: #c42b1f;
+  --danger-on: #ffffff;
   --ui-font: "思源黑体", "Microsoft YaHei", system-ui, sans-serif;
   --radius: 4px;
   --shadow: 0 6px 22px rgba(0, 0, 0, 0.10);
@@ -189,6 +224,9 @@ body[data-style="ink"].dark {
   --border-strong: #4a4a4a;
   --accent: #e05248;
   --accent-2: #c23a30;
+  --accent-on: #1a0f0d;
+  --danger: #ff6b6b;
+  --danger-on: #2a0a0a;
   --shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
 }
 
@@ -237,7 +275,7 @@ body {
   padding: 7px 12px; font-size: 13px; border-radius: 6px;
   cursor: pointer; color: var(--text); white-space: nowrap;
 }
-.menu-drop li:hover { background: var(--accent); color: #fff; }
+.menu-drop li:hover { background: var(--accent); color: var(--accent-on); }
 .menu-drop li.sep {
   height: 1px; padding: 0; margin: 5px 6px;
   background: var(--border); cursor: default;
@@ -347,7 +385,7 @@ body {
   transition: background .12s ease;
 }
 .file-list li:hover { background: var(--bg-3); }
-.file-list li.active { background: var(--accent); color: #fff; }
+.file-list li.active { background: var(--accent); color: var(--accent-on); }
 .file-list li .ic { flex: 0 0 auto; opacity: .8; }
 .file-list li .name {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
@@ -371,6 +409,36 @@ body {
 .cm-editor { height: 100%; font-size: var(--editor-font); }
 /* 常驻 gutter：横向滚动条固定在编辑器底边，纵向滚动时也不会消失 */
 .cm-scroller { overflow: auto; scrollbar-gutter: stable; }
+
+/* ---------- CodeMirror 选区 / 行号栏（跟随主题） ---------- */
+/* 编辑器的选区不走 ::selection，而是 CodeMirror 自绘的一层 .cm-selectionBackground。
+   其默认色是不透明浅灰，深色模式下浅字压浅底会"看不到字"。
+   这里改为半透明强调色：文字保持原色，深浅主题下对比度都足够，
+   所以选中的文字不需要（也无法通过 CSS 单独）改前景色。 */
+.cm-editor .cm-selectionBackground,
+.cm-editor.cm-focused .cm-selectionBackground {
+  background: color-mix(in srgb, var(--accent) 30%, transparent) !important;
+}
+
+/* 行号栏跟随主题底色，当前行（光标所在行）的行号一起高亮 */
+.cm-editor .cm-gutters {
+  background: var(--bg-2);
+  color: var(--text-2);
+  border-right: 1px solid var(--border-strong);
+}
+.cm-editor .cm-activeLineGutter {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--text);
+}
+.cm-editor .cm-activeLine {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+/* 深色下默认光标是黑色，几乎看不见 */
+body.dark .cm-editor .cm-cursor,
+body.dark .cm-editor .cm-dropCursor {
+  border-left-color: var(--text);
+}
 
 /* ---------- 查找 / 替换：页面顶部浮动条（Chrome 风格） ---------- */
 .find-bar {
@@ -422,9 +490,34 @@ body {
 /* CodeMirror 内置搜索面板已被顶部查找条取代，这里兜底隐藏，避免两套 UI 打架 */
 .cm-panels { display: none !important; }
 
-/* 预览区查找：用原生 Selection 标记当前匹配项，配色对齐 Chrome */
-.preview ::selection,
-.preview::selection { background: rgba(255, 145, 0, .62); color: var(--text); }
+/* 全局选中色：用固定的半透明蓝 + 跟随主题的 --text。
+   浅色下是浅蓝底深字，深色下混色成深蓝底浅字，两种主题都清晰可读。
+   （不能像查找高亮那样写死深色前景，否则深色模式就是深字压深蓝，反而看不见。） */
+::selection {
+  background: rgba(88, 166, 255, .32);
+  color: var(--text);
+}
+/* 支持 color-mix 时用主题强调色着色，与当前风格配套（不支持则沿用上面的固定色） */
+::selection {
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
+  color: var(--text);
+}
+
+/* 预览区查找：优先用 CSS 自定义高亮（::highlight），它不改动 DOM、也不占用
+   原生选区，因此不会把"用户正常选中文字"染成查找色。
+   前景写死深色：橙色底压深色字在浅色/深色主题下都清晰。 */
+::highlight(find-match) {
+  background: rgba(255, 145, 0, .62);
+  color: #1a1a1a;
+}
+
+/* 兜底：旧版 WebView 不支持 ::highlight 时仍退回用选区标记当前匹配项。
+   仅在这种情况下（body.find-fallback）才把选区染成查找色，避免常态下污染选中色。 */
+body.find-fallback .preview ::selection,
+body.find-fallback .preview::selection {
+  background: rgba(255, 145, 0, .62);
+  color: #1a1a1a;
+}
 
 /* 匹配项高亮：全部浅黄，当前项橙色（同 Chrome） */
 .cm-find-match { background: rgba(255, 214, 0, .38); border-radius: 2px; }
@@ -433,6 +526,9 @@ body {
   box-shadow: 0 0 0 1px rgba(190, 100, 0, .55);
   border-radius: 2px;
 }
+/* 深色下正文是浅色字，压在橙色上对比度不足（约 3.3:1），改为深色字压橙底。
+   选择器带上 .cm-content 提高优先级，确保盖过 CodeMirror 的语法高亮着色类。 */
+body.dark .cm-content .cm-find-match.cm-find-active { color: #1a1a1a; }
 
 /* 可拖拽分隔条 */
 .divider {
@@ -536,7 +632,7 @@ body {
   border: none; background: transparent; color: var(--text-2);
   border-radius: 4px; font-size: 14px; line-height: 1; cursor: pointer;
 }
-.tab-close:hover { background: #e5484d; color: #fff; }
+.tab-close:hover { background: var(--danger); color: var(--danger-on); }
 
 /* 页签右键菜单 */
 .ctx-menu {
@@ -558,7 +654,9 @@ body {
   cursor: pointer;
   white-space: nowrap;
 }
-.ctx-item:hover { background: var(--accent); color: #fff; }
+.ctx-item:hover { background: var(--accent); color: var(--accent-on); }
+.ctx-item.disabled { color: var(--text-2); opacity: .55; cursor: default; }
+.ctx-item.disabled:hover { background: transparent; color: var(--text-2); }
 .ctx-sep { height: 1px; margin: 4px 2px; background: var(--border); }
 
 /* 预览加载态：覆盖在预览区上的居中 spinner */
@@ -593,29 +691,58 @@ body {
 .markdown-body pre code { background: transparent; padding: 0; }
 
 /* ---------- 代码块容器：语言小标题 + 一键复制 ---------- */
+/* 代码块配色自成一组（--code-*），随风格与明暗自动成套。
+   关键修正：标题栏不再用 --bg-2 —— 暗色下 --bg-2 比代码块底色更深，
+   再叠上低对比度的 --text-2，就变成"深蓝底压灰蓝字"完全看不清（清新蓝暗色最明显）。
+   现在标题栏 = 强调色混入代码底色，文字一律用 --text 保证对比度。 */
 .code-wrap {
-  margin: .9em 0; border: 1px solid var(--border); border-radius: 10px;
-  overflow: hidden; background: var(--bg-3); font-size: 13.6px;
+  --code-body-bg: var(--bg-3);
+  --code-head-bg: color-mix(in srgb, var(--accent) 14%, var(--bg-3));
+  --code-head-fg: var(--text);
+  --code-btn-bg: color-mix(in srgb, var(--text) 14%, var(--bg-3));
+  --code-btn-fg: var(--text);
+  --code-btn-hover-bg: color-mix(in srgb, var(--accent) 34%, var(--bg-3));
+  --code-ok-fg: #1a7f37;
+
+  margin: .9em 0; border: 1px solid var(--border-strong); border-radius: 10px;
+  overflow: hidden; background: var(--code-body-bg); font-size: 13.6px;
 }
+body.dark .code-wrap { --code-ok-fg: #56d364; }
+
 .code-head {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 5px 8px 5px 12px; border-bottom: 1px solid var(--border);
-  background: var(--bg-2); user-select: none; line-height: 1.4;
+  padding: 5px 8px 5px 12px; border-bottom: 1px solid var(--border-strong);
+  background: var(--code-head-bg); user-select: none; line-height: 1.4;
 }
 .code-lang {
   font-size: 11.5px; font-weight: 600; letter-spacing: .5px;
-  color: var(--text-2); text-transform: uppercase;
+  color: var(--code-head-fg); text-transform: uppercase;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .code-copy {
   flex: none; display: inline-flex; align-items: center; gap: 5px;
-  padding: 3px 9px; border: 1px solid var(--border); border-radius: 6px;
-  background: var(--bg); color: var(--text-2); font-size: 11.5px;
+  padding: 3px 9px; border: 1px solid var(--border-strong); border-radius: 6px;
+  background: var(--code-btn-bg); color: var(--code-btn-fg); font-size: 11.5px;
   font-family: inherit; cursor: pointer; transition: background .15s, color .15s, border-color .15s;
 }
-.code-copy:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
-.code-copy.copied { color: #2ea043; border-color: #2ea043; }
+.code-copy:hover { background: var(--code-btn-hover-bg); color: var(--text); border-color: var(--accent); }
+.code-copy.copied { color: var(--code-ok-fg); border-color: var(--code-ok-fg); }
 .code-copy svg { display: block; }
+
+/* 各风格的细节微调：基础配色已随 --accent 自动成套，这里只补风格气质。
+   清新蓝（撞色鲜明）：标题栏更实一点；复古古典：暖棕；墨色：克制的灰。 */
+body[data-style="vibrant"] .code-wrap {
+  --code-head-bg: color-mix(in srgb, var(--accent) 20%, var(--bg-3));
+  --code-btn-hover-bg: color-mix(in srgb, var(--accent) 42%, var(--bg-3));
+}
+body[data-style="classic"] .code-wrap {
+  --code-head-bg: color-mix(in srgb, var(--accent) 16%, var(--bg-3));
+}
+body[data-style="classic"] .code-lang { letter-spacing: .8px; }
+body[data-style="ink"] .code-wrap {
+  --code-head-bg: color-mix(in srgb, var(--accent) 12%, var(--bg-3));
+  --code-btn-bg: color-mix(in srgb, var(--text) 18%, var(--bg-3));
+}
 
 /* 容器内的 pre 去掉自身底色/圆角，避免与外层容器描边叠加 */
 .code-wrap > pre,
@@ -694,10 +821,10 @@ body[data-view="preview"] .preview-pane { flex-basis: 100% !important; }
 .modal-box output { display: inline-block; margin-top: 6px; color: var(--accent); font-weight: 600; }
 .modal-close {
   width: 100%; padding: 9px; border: 0; border-radius: var(--radius);
-  background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+  background: var(--accent); color: var(--accent-on); font: inherit; font-weight: 600; cursor: pointer;
   transition: background .15s ease;
 }
-.modal-close:hover { background: var(--accent-2); }
+.modal-close:hover { background: var(--accent-2); color: var(--accent-on); }
 
 /* 关于 */
 .about-name { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
@@ -743,7 +870,11 @@ body[data-style="mint"] .file-list li.active { box-shadow: 0 2px 10px rgba(46, 1
 body[data-style="mint"] .divider::after { width: 3px; background: var(--accent); }
 body[data-style="mint"] .preview pre,
 body[data-style="mint"] .markdown-body code { background: color-mix(in srgb, var(--accent) 10%, var(--bg-3)); }
-body[data-style="mint"] .code-wrap { background: color-mix(in srgb, var(--accent) 10%, var(--bg-3)); }
+/* 薄荷风：代码块带淡青底，标题栏再深一档 */
+body[data-style="mint"] .code-wrap {
+  --code-body-bg: color-mix(in srgb, var(--accent) 10%, var(--bg-3));
+  --code-head-bg: color-mix(in srgb, var(--accent) 26%, var(--bg-3));
+}
 body[data-style="mint"] .code-wrap pre { background: transparent; }
 body[data-style="mint"] ::-webkit-scrollbar-thumb { background: var(--accent); }
 
@@ -784,10 +915,26 @@ body[data-style="cyber"] .markdown-body h2 { border-bottom: 1px solid var(--neon
 body[data-style="cyber"] .markdown-body blockquote { border-left-color: var(--neon-cyan); }
 body[data-style="cyber"] .preview pre,
 body[data-style="cyber"] .markdown-body code { background: #0c0c18; border: 1px solid var(--neon-cyan); }
-body[data-style="cyber"] .code-wrap { background: #0c0c18; border: 1px solid var(--neon-cyan); box-shadow: 0 0 6px rgba(0, 240, 255, .25); }
-body[data-style="cyber"] .code-head { background: #14142a; border-bottom: 1px solid var(--neon-cyan); }
-body[data-style="cyber"] .code-lang { color: var(--neon-cyan); }
-body[data-style="cyber"] .code-wrap pre { background: transparent; border: 0; }
+/* 赛博风：霓虹描边 + 青色语言名。
+   浅色下保持浅底（否则 hljs 的深色字会压在黑底上看不见），只有暗色才用黑底霓虹。 */
+body[data-style="cyber"] .code-wrap {
+  --code-head-bg: color-mix(in srgb, var(--accent) 16%, var(--bg-3));
+  --code-head-fg: var(--neon-cyan);
+  --code-btn-fg: var(--neon-cyan);
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 6px rgba(0, 240, 255, .25);
+}
+body[data-style="cyber"] .code-head { border-bottom-color: var(--neon-cyan); }
+body[data-style="cyber"].dark .code-wrap {
+  --code-body-bg: #0c0c18;
+  --code-head-bg: #14142a;
+  --code-btn-bg: #1e1e38;
+  --code-btn-hover-bg: color-mix(in srgb, var(--accent) 40%, #14142a);
+}
+/* 提高优先级，盖掉各风格里"pre 统一底色/描边"的规则：
+   容器已经画好了底和边，内层 pre 必须透明无描边，否则会出现双层边框 */
+body[data-style="mint"] .preview .code-wrap pre,
+body[data-style="cyber"] .preview .code-wrap pre { background: transparent; border: 0; }
 body[data-style="cyber"] ::-webkit-scrollbar-thumb { background: var(--neon-cyan); box-shadow: 0 0 6px var(--neon-cyan); }
 
 /* ——— 复古古典：纸感细棕描边、虚线、书本硬阴影 ——— */
@@ -810,7 +957,7 @@ body[data-style="classic"] .modal-close {
   background: var(--bg-2); color: var(--text);
   border: 1px solid var(--border-strong); box-shadow: 1px 1px 0 var(--border-strong);
 }
-body[data-style="classic"] .modal-close:hover { background: var(--accent); color: #fff; }
+body[data-style="classic"] .modal-close:hover { background: var(--accent); color: var(--accent-on); }
 body[data-style="classic"] ::-webkit-scrollbar-thumb { background: var(--border-strong); border-color: var(--bg-2); }
 
 /* ——— 墨色国风：朱红细线、留白、印章式按钮 ——— */

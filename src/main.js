@@ -83,9 +83,63 @@ function updateStyleMenu() {
   });
 }
 
+// ===== 预览渲染缓存（按页签） =====
+// 切换页签并不会重新读磁盘（内容已在内存），但预览会被整块重绘：
+//   marked.parse 解析 + 图片读盘转 base64 的 await + 200ms 防抖，
+// 于是会先残留上一个页签的内容、再整块刷新，观感就是"闪一下"。
+// 这里把每个页签「渲染完成后的最终 HTML」缓存下来（含已解析好的 data URI 图片、
+// hljs 高亮、代码块装饰与 data-line 锚点），切回来时直接 innerHTML 还原：
+// 不重新解析、不等图片、不等 200ms —— 同一帧内完成，肉眼无闪烁。
+
+const MAX_PREVIEW_CACHE = 3000000; // 过长的 HTML 不缓存，避免占用过多内存
+
+// 简单字符串哈希（djb2）生成缓存键，避免把整篇正文当 key 反复比对
+function hashString(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+
+function makePreviewKey(text, mode, path) {
+  return mode + "\u0000" + (path || "") + "\u0000" + hashString(text);
+}
+
+function currentPreviewKey() {
+  return makePreviewKey(editor.getContent(), currentMode, currentPath);
+}
+
+// 本次渲染对应的缓存键。必须在调用 render 之前确定：渲染是异步的（要等图片），
+// 若等 preview:rendered 再按"当时的正文"算键，可能把旧 HTML 挂到新正文的键上。
+let pendingRender = null; // { key }
+
+function runRender(text) {
+  pendingRender = { key: makePreviewKey(text, currentMode, currentPath) };
+  return render(previewEl, iframeEl, text, currentMode, currentPath);
+}
+
 function schedulePreview(text) {
   clearTimeout(previewTimer);
-  previewTimer = setTimeout(() => render(previewEl, iframeEl, text, currentMode, currentPath), 200);
+  previewTimer = setTimeout(() => runRender(text), 200);
+}
+
+// 切换页签后的预览处理：优先用缓存即时还原；没有缓存则立即重绘（跳过 200ms 防抖），
+// 避免出现"先显示上一个页签内容、再跳变"的观感。
+function refreshPreviewForTab(t) {
+  currentMode = detectMode(currentPath, modeSelect.value);
+  clearTimeout(previewTimer); // 取消上一个页签遗留的渲染任务
+
+  const cached = t.previewCache;
+  if (currentMode !== "html" && cached && cached.key === currentPreviewKey()) {
+    iframeEl.hidden = true;
+    previewEl.hidden = false;
+    previewEl.innerHTML = cached.html; // 同步还原，图片已是 data URI，不会再有加载过程
+    pendingRender = null;
+    previewEl.dispatchEvent(
+      new CustomEvent("preview:rendered", { detail: { preserved: true, clamped: false } })
+    );
+    return;
+  }
+  runRender(t.content != null ? t.content : "");
 }
 
 function onContentChange(text) {
@@ -152,6 +206,20 @@ setupSplit({
 const tabs = [];
 let activeTab = null;
 let tabSeq = 0;
+let untitledSeq = 0; // "未命名-N" 的序号
+
+// 页签显示名：已保存到磁盘的用文件名；尚未保存的新文件用"未命名-N"
+function tabDisplayName(t) {
+  if (t.path) return t.path.split(/[\\/]/).pop();
+  return t.name || "未命名";
+}
+
+// 新建空白页签（尚未保存到磁盘，没有路径），避免沿用上一个页签的名称
+function createUntitledTab() {
+  const t = { id: ++tabSeq, path: null, name: "未命名-" + ++untitledSeq, content: "", dirty: false };
+  tabs.push(t);
+  return t;
+}
 const history = []; // 浏览历史（path 序列），用于前进 / 后退
 let histIndex = -1;
 
@@ -169,7 +237,7 @@ function renderTabs() {
   tabs.forEach((t) => {
     const el = document.createElement("div");
     el.className = "tab" + (t === activeTab ? " active" : "");
-    el.title = t.path;
+    el.title = t.path || tabDisplayName(t);
     // 常驻透明圆点占位，修改后加 .on 显示，保存后去掉 .on 变透明（布局不跳动）
     const dot = document.createElement("span");
     dot.className = "tab-dot" + (t.dirty ? " on" : "");
@@ -177,7 +245,7 @@ function renderTabs() {
     el.appendChild(dot);
     const name = document.createElement("span");
     name.className = "tab-name";
-    name.textContent = t.path.split(/[\\/]/).pop();
+    name.textContent = tabDisplayName(t);
     el.appendChild(name);
     const close = document.createElement("button");
     close.className = "tab-close";
@@ -246,22 +314,76 @@ function setTabDirty(t, v) {
   }
 }
 
-// 切换到一个已存在的 tab：先保存当前编辑器内容，再加载目标 tab 的内容
+// ===== 每个页签独立的滚动位置 =====
+// t.scroll = { editor: 编辑框 scrollTop, preview: 预览区 scrollTop }
+
+function getPreviewPane() {
+  return $("preview-pane");
+}
+
+function saveTabScroll(t) {
+  if (!t || !editor) return;
+  const pane = getPreviewPane();
+  const es = editor.view ? editor.view.scrollDOM.scrollTop : 0;
+  const ps = pane ? pane.scrollTop : 0;
+  t.scroll = { editor: es, preview: ps };
+}
+
+// 预览是延迟渲染的（约 200ms 防抖），切换页签时必须等本次渲染完成后才能把滚动位置
+// 落到正确的内容上，所以这里登记一个待恢复值，由 preview:rendered 处理。
+let pendingPreviewScroll = null; // { id, top }
+
+function restoreTabScroll(t) {
+  const s = t.scroll || { editor: 0, preview: 0 };
+  const pane = getPreviewPane();
+
+  // 切换期间两侧都会被程序化滚动，这些不是用户操作，
+  // 必须让滚动联动先"让位"，否则刚恢复的位置立刻会被自动对齐抢回去。
+  if (scrollSync) scrollSync.suppressAlign(450);
+
+  if (pane) {
+    // 预览内容已在 refreshPreviewForTab 中就位，这里同帧直接落到记录的位置，
+    // 不再"先归零再等渲染完成后跳回去"（那正是切换时看到的跳动）。
+    pendingPreviewScroll = s.preview > 0 ? { id: t.id, top: s.preview } : null;
+    const want = Math.min(s.preview, Math.max(0, pane.scrollHeight - pane.clientHeight));
+    pane.scrollTop = want;
+    // 图片等异步资源加载后布局可能变高，届时再校正一次（内容未变时 preview.js 会保留位置）
+    if (scrollSync) scrollSync.suppressAlign(450);
+  }
+
+  // 恢复编辑框位置。文档刚换，必须等 CodeMirror 完成排版后 scrollTop 才有正确上限，
+  // 所以分两步：先立刻尝试一次，再在一帧后补一次（处理长文档/换行因素导致的重排）。
+  const applyEditorScroll = () => {
+    const el = editor.view && editor.view.scrollDOM;
+    if (!el) return;
+    const top = Math.min(s.editor, Math.max(0, el.scrollHeight - el.clientHeight));
+    if (top !== el.scrollTop) {
+      el.scrollTop = top;
+      if (scrollSync) scrollSync.suppressAlign(450);
+    }
+  };
+  applyEditorScroll();
+  editor.view.requestMeasure({ read: applyEditorScroll });
+}
+
+// 切换到一个已存在的 tab：先保存当前编辑器内容与滚动位置，再加载目标 tab 的内容。
+// 每个页签各自记录编辑框与预览区的滚动位置，切回来时能回到原来的位置。
 function switchToTab(t) {
   if (!t) return;
-  if (activeTab) activeTab.content = editor.getContent();
+  if (activeTab) {
+    activeTab.content = editor.getContent();
+    if (activeTab !== t) saveTabScroll(activeTab);
+  }
   activeTab = t;
   currentPath = t.path;
   loadingGuard = true;
   editor.setContent(t.content != null ? t.content : "");
   loadingGuard = false;
-  // 切换文档时预览要回到顶部。预览重绘是"保留滚动位置"的（避免输入时抖动），
-  // 所以这里必须显式归零，否则新文档会沿用上一个文档的滚动偏移。
-  const pane = $("preview-pane");
-  if (pane) pane.scrollTop = 0;
-  titleEl.textContent = "极简编辑器 — " + t.path.split(/[\\/]/).pop();
+  // 先把预览内容就位（命中缓存则同步完成），再落滚动位置，避免看到"从顶部跳回去"
+  refreshPreviewForTab(t);
+  restoreTabScroll(t);
+  titleEl.textContent = "极简编辑器 — " + tabDisplayName(t);
   statusSaved.textContent = "已打开";
-  updateMode();
   renderTabs();
   // 将当前页签滚动到可见区域
   const list = $("tab-list");
@@ -345,9 +467,11 @@ function closeTab(t) {
 
 // 重新加载当前页签：从磁盘重新读取并刷新内容
 async function reloadTab(t) {
+  if (!t.path) return; // 未保存的新文件无处可重新加载
   try {
     const txt = await files.readFile(t.path);
     t.content = txt;
+    t.previewCache = null; // 内容来自磁盘重读，旧缓存失效
     if (activeTab === t) {
       loadingGuard = true;
       editor.setContent(txt);
@@ -394,9 +518,10 @@ function showTabCtxMenu(t, x, y) {
   ctxTargetTab = t;
   const menu = $("tab-ctx-menu");
   if (!menu) return;
+  const named = !!t.path; // 未保存的新文件没有路径，读盘相关的操作不可用
   const items = [
-    { label: "重新加载", action: () => reloadTab(t) },
-    { label: "在新窗口中打开", action: () => files.openInNewWindow(t.path) },
+    { label: "重新加载", disabled: !named, action: () => reloadTab(t) },
+    { label: "在新窗口中打开", disabled: !named, action: () => files.openInNewWindow(t.path) },
     { sep: true },
     { label: "关闭", action: () => closeTab(t) },
     { label: "关闭其他页签", action: () => closeOtherTabs(t) },
@@ -413,12 +538,16 @@ function showTabCtxMenu(t, x, y) {
       return;
     }
     const mi = document.createElement("div");
-    mi.className = "ctx-item";
+    mi.className = "ctx-item" + (it.disabled ? " disabled" : "");
     mi.textContent = it.label;
-    mi.addEventListener("click", () => {
-      hideTabCtxMenu();
-      it.action();
-    });
+    if (it.disabled) {
+      mi.title = "该页签尚未保存到文件";
+    } else {
+      mi.addEventListener("click", () => {
+        hideTabCtxMenu();
+        it.action();
+      });
+    }
     menu.appendChild(mi);
   });
   menu.hidden = false;
@@ -604,6 +733,27 @@ if (isTauri) {
 // 预览渲染（含图片加载）完成后的处理。
 // 滚动锚点的重建与重新对齐已由 scrollsync 内部订阅该事件完成，这里不再重复调用。
 previewEl.addEventListener("preview:rendered", () => {
+  // 渲染完成后把最终 HTML 存入当前页签的缓存，供下次切回来时直接还原。
+  // 用 pendingRender.key（渲染前算好的）而不是"当时的正文"，避免正文在渲染异步期间
+  // 又变了导致键与内容对不上。
+  if (pendingRender && activeTab && !previewEl.hidden) {
+    const html = previewEl.innerHTML;
+    activeTab.previewCache =
+      html.length <= MAX_PREVIEW_CACHE ? { key: pendingRender.key, html } : null;
+    pendingRender = null;
+  }
+  // 切到某个页签后，等预览重绘完成再校正一次该页签记录的滚动位置
+  // （正常已在切换时同帧落好，这里只是图片等资源加载后布局变化的兜底）
+  if (pendingPreviewScroll && activeTab && pendingPreviewScroll.id === activeTab.id) {
+    const top = pendingPreviewScroll.top;
+    pendingPreviewScroll = null;
+    const pane = $("preview-pane");
+    if (pane) {
+      const max = Math.max(0, pane.scrollHeight - pane.clientHeight);
+      pane.scrollTop = Math.min(top, max);
+      if (scrollSync) scrollSync.suppressAlign(450);
+    }
+  }
   // 预览重渲染后文本节点失效，正在预览区查找时重算匹配
   if (findReplace) findReplace.refresh();
 });
@@ -686,7 +836,20 @@ async function saveFile(path) {
   try {
     await files.writeFile(path, editor.getContent());
     currentPath = path;
-    if (activeTab) setTabDirty(activeTab, false);
+    if (activeTab) {
+      // 首次保存"未命名-N"：把路径补上、去掉占位名，页签即改显示真实文件名，
+      // 之后从文件树再打开同一文件也能复用这个页签，不会重复开一个
+      activeTab.path = path;
+      delete activeTab.name;
+      setTabDirty(activeTab, false);
+      renderTabs();
+    } else {
+      // 之前没有任何页签（如拖入文件后直接保存）：补建一个
+      const t = { id: ++tabSeq, path, content: editor.getContent(), dirty: false };
+      tabs.push(t);
+      switchToTab(t);
+      renderTabs();
+    }
     titleEl.textContent = "极简编辑器 — " + path.split(/[\\/]/).pop();
     statusSaved.textContent = "已保存";
   } catch (e) {
@@ -806,29 +969,18 @@ function zoom(delta) {
 
 // ---- 菜单栏动作分发 ----
 const menuActions = {
+  // 新建：开一个独立的"未命名-N"页签，不再复用/顶替当前页签（否则会沿用上一个文件的名称）
   "new": () => {
-    loadingGuard = true;
-    editor.setContent("");
-    loadingGuard = false;
-    currentPath = null;
-    titleEl.textContent = "极简编辑器 — 未命名";
+    const t = createUntitledTab();
+    switchToTab(t);
     statusSaved.textContent = "就绪";
-    updateMode();
+    editor.view.focus();
   },
+  // 打开：同样开一个独立页签，避免内容换了而页签名还留着旧文件
   "open": async () => {
     const p = await files.pickOpen();
     if (!p) return;
-    try {
-      const txt = await files.readFile(p);
-      currentPath = p;
-      editor.setContent(txt);
-      titleEl.textContent = "极简编辑器 — " + p.split(/[\\/]/).pop();
-      statusSaved.textContent = "已打开";
-      updateMode();
-    } catch (e) {
-      statusSaved.textContent = "打开失败";
-      console.error(e);
-    }
+    openFileInTab(p, { record: true, activate: true });
   },
   "open-dir": () => $("btn-open-dir").click(),
   "save": async () => {

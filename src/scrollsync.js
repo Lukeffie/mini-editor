@@ -28,6 +28,8 @@ let r1 = null;
 let alignTimer = null;
 // 该任务是否由"用户滚动编辑器"触发（由用户滚动触发的更强势，不受浏览守卫限制）
 let alignForce = false;
+// 外部正在恢复滚动位置（如切换页签），此期间禁止自动对齐去争抢位置
+let suppressUntil = 0;
 // 布局沉淀后的二次校正
 let settleTimer = null;
 
@@ -61,6 +63,16 @@ function userBrowsingPreview() {
 }
 
 // 执行一次同步，并在 SYNC_HOLD 内屏蔽反向同步
+function isSuppressed() {
+  return Date.now() < suppressUntil;
+}
+
+// 切换页签等场景：两侧都会程序化地恢复各自的滚动位置，这期间产生的 scroll 事件
+// 不是用户意图，必须短时禁止自动对齐，否则恢复出来的位置会被立刻覆盖掉。
+function suppressAlign(ms = 450) {
+  suppressUntil = Math.max(suppressUntil, Date.now() + ms);
+}
+
 function withSyncGuard(fn) {
   syncing = true;
   try {
@@ -177,8 +189,9 @@ function syncEditorToPreview(view, previewPane) {
 // 这里把请求合并成一次，执行时再读最新位置，避免两次写入互相推挤。
 // force=true 表示"用户明确在滚动编辑器"，此时不受预览浏览守卫限制。
 function scheduleAlign(delay = ALIGN_DEBOUNCE, force = false) {
+  if (isSuppressed()) return; // 外部正在恢复滚动位置，不去争抢
   if (force) alignForce = true;
-  if (alignTimer) return; // 已有待执行的任务，直接合并
+  if (alignTimer) return; // 已有待执行的任务，直接合并（force 已记录到 alignForce）
   alignTimer = setTimeout(() => {
     alignTimer = null;
     const f = alignForce;
@@ -284,5 +297,5 @@ export function setupScrollSync({ editor, previewPane, previewEl, debounce = ALI
     }, debounce);
   });
 
-  return { rebuild, refresh, scrollEditorToLine };
+  return { rebuild, refresh, suppressAlign, scrollEditorToLine };
 }
