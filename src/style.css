@@ -460,12 +460,12 @@ body.dark .cm-editor .cm-dropCursor {
 }
 .find-input::placeholder { color: var(--text-2); }
 .find-input:focus { border-color: var(--accent); }
-.find-input.no-match { border-color: #e5484d; }
+.find-input.no-match { border-color: var(--danger); }
 .find-count {
   flex: none; min-width: 54px; text-align: center; color: var(--text-2);
   font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden;
 }
-.find-count.none { color: #e5484d; }
+.find-count.none { color: var(--danger); }
 .find-btn {
   flex: none; display: inline-flex; align-items: center; justify-content: center;
   height: 26px; min-width: 26px; padding: 0 4px;
@@ -521,6 +521,8 @@ body.find-fallback .preview::selection {
 
 /* 匹配项高亮：全部浅黄，当前项橙色（同 Chrome） */
 .cm-find-match { background: rgba(255, 214, 0, .38); border-radius: 2px; }
+/* 暗色下降低黄色透明度，让底色更深，浅色正文压上去才有足够对比（约 4.4 → 5.0:1） */
+body.dark .cm-find-match { background: rgba(255, 214, 0, .30); }
 .cm-find-match.cm-find-active {
   background: rgba(255, 145, 0, .62);
   box-shadow: 0 0 0 1px rgba(190, 100, 0, .55);
@@ -703,11 +705,12 @@ body.dark .cm-content .cm-find-match.cm-find-active { color: #1a1a1a; }
   --code-btn-fg: var(--text);
   --code-btn-hover-bg: color-mix(in srgb, var(--accent) 34%, var(--bg-3));
   --code-ok-fg: #1a7f37;
+  --code-ok-on: #ffffff;
 
   margin: .9em 0; border: 1px solid var(--border-strong); border-radius: 10px;
   overflow: hidden; background: var(--code-body-bg); font-size: 13.6px;
 }
-body.dark .code-wrap { --code-ok-fg: #56d364; }
+body.dark .code-wrap { --code-ok-fg: #56d364; --code-ok-on: #10231a; }
 
 .code-head {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -726,7 +729,12 @@ body.dark .code-wrap { --code-ok-fg: #56d364; }
   font-family: inherit; cursor: pointer; transition: background .15s, color .15s, border-color .15s;
 }
 .code-copy:hover { background: var(--code-btn-hover-bg); color: var(--text); border-color: var(--accent); }
-.code-copy.copied { color: var(--code-ok-fg); border-color: var(--code-ok-fg); }
+/* "已复制"用实色绿底 + 配套前景：浅色用白字(5.1:1)，暗色用深色字(8.5:1)。
+   若只改文字颜色不改底，绿字压在浅色按钮底上只有 3.5:1，不够清晰。 */
+.code-copy.copied {
+  background: var(--code-ok-fg); border-color: var(--code-ok-fg);
+  color: var(--code-ok-on);
+}
 .code-copy svg { display: block; }
 
 /* 各风格的细节微调：基础配色已随 --accent 自动成套，这里只补风格气质。
@@ -913,14 +921,24 @@ body[data-style="cyber"] .file-list li.active { box-shadow: 0 0 10px var(--accen
 body[data-style="cyber"] .markdown-body h1,
 body[data-style="cyber"] .markdown-body h2 { border-bottom: 1px solid var(--neon-cyan); }
 body[data-style="cyber"] .markdown-body blockquote { border-left-color: var(--neon-cyan); }
-body[data-style="cyber"] .preview pre,
-body[data-style="cyber"] .markdown-body code { background: #0c0c18; border: 1px solid var(--neon-cyan); }
-/* 赛博风：霓虹描边 + 青色语言名。
-   浅色下保持浅底（否则 hljs 的深色字会压在黑底上看不见），只有暗色才用黑底霓虹。 */
+/* 赛博：行内代码。明暗分开配色——浅色淡青底深字，暗色黑底浅字。
+   不能统一用黑底：浅色主题正文是深色字，压在 #0c0c18 上完全看不见。 */
+body[data-style="cyber"] .markdown-body :not(pre) > code {
+  background: color-mix(in srgb, var(--neon-cyan) 14%, var(--bg-3));
+  color: #0d1b2a;
+  border: 1px solid var(--neon-cyan);
+}
+body[data-style="cyber"].dark .markdown-body :not(pre) > code {
+  background: #0c0c18;
+  color: #d8f7ff;
+}
+body[data-style="cyber"].dark .preview pre {
+  background: #0c0c18; color: #d8f7ff; border: 1px solid var(--neon-cyan);
+}
+/* 赛博风代码块：霓虹描边。青色语言名只用于暗色——
+   浅色下 --neon-cyan 压在淡紫标题栏上只有 1.3:1，等于看不见。 */
 body[data-style="cyber"] .code-wrap {
   --code-head-bg: color-mix(in srgb, var(--accent) 16%, var(--bg-3));
-  --code-head-fg: var(--neon-cyan);
-  --code-btn-fg: var(--neon-cyan);
   border-color: var(--neon-cyan);
   box-shadow: 0 0 6px rgba(0, 240, 255, .25);
 }
@@ -928,13 +946,16 @@ body[data-style="cyber"] .code-head { border-bottom-color: var(--neon-cyan); }
 body[data-style="cyber"].dark .code-wrap {
   --code-body-bg: #0c0c18;
   --code-head-bg: #14142a;
+  --code-head-fg: var(--neon-cyan);
   --code-btn-bg: #1e1e38;
+  --code-btn-fg: var(--neon-cyan);
   --code-btn-hover-bg: color-mix(in srgb, var(--accent) 40%, #14142a);
 }
 /* 提高优先级，盖掉各风格里"pre 统一底色/描边"的规则：
    容器已经画好了底和边，内层 pre 必须透明无描边，否则会出现双层边框 */
 body[data-style="mint"] .preview .code-wrap pre,
-body[data-style="cyber"] .preview .code-wrap pre { background: transparent; border: 0; }
+body[data-style="cyber"] .preview .code-wrap pre,
+body[data-style="cyber"].dark .preview .code-wrap pre { background: transparent; border: 0; }
 body[data-style="cyber"] ::-webkit-scrollbar-thumb { background: var(--neon-cyan); box-shadow: 0 0 6px var(--neon-cyan); }
 
 /* ——— 复古古典：纸感细棕描边、虚线、书本硬阴影 ——— */
