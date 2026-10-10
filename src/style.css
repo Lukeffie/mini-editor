@@ -22,6 +22,30 @@
   --danger-on: #ffffff;
   --radius: 8px;
   --shadow: 0 6px 24px rgba(0, 0, 0, 0.10);
+
+  /* 编辑框（CodeMirror）的 Markdown 语法着色，由 editor.js 的自定义 HighlightStyle 引用。
+     深色版本统一在下面的 body.dark 中覆盖，六套风格共用。 */
+  --cm-code: #24292f;   /* 行内代码 / ``` 块正文 */
+  --cm-mark: #404740;   /* ``` # > - [] 等标记 */
+  --cm-label: #0969da;  /* ``` 后的语言名、链接文字 */
+  --cm-link: #0969da;
+  --cm-comment: #6a737d;
+  --cm-keyword: #cf222e;
+  --cm-string: #0a3069;
+  --cm-number: #0550ae;
+}
+
+/* 深色模式下的语法着色：默认配色是给浅色底用的深蓝/深灰，这里整体提亮。
+   下面各值对最深的底色（#18181c）对比度都在 6:1 以上。 */
+body.dark {
+  --cm-code: #e6edf3;
+  --cm-mark: #aab2bd;
+  --cm-label: #d2a8ff;
+  --cm-link: #79c0ff;
+  --cm-comment: #a8b3bd;
+  --cm-keyword: #ff7b72;
+  --cm-string: #a5d6ff;
+  --cm-number: #79c0ff;
 }
 
 /* 极致极简风 · 暗 */
@@ -407,6 +431,8 @@ body {
 }
 #editor { flex: 1; height: 100%; overflow: hidden; }
 .cm-editor { height: 100%; font-size: var(--editor-font); }
+/* 正文显式跟随主题前景色，避免继承到浏览器默认的黑色（深色模式下等于黑字压深底） */
+.cm-editor .cm-content { color: var(--text); }
 /* 常驻 gutter：横向滚动条固定在编辑器底边，纵向滚动时也不会消失 */
 .cm-scroller { overflow: auto; scrollbar-gutter: stable; }
 
@@ -531,6 +557,9 @@ body.dark .cm-find-match { background: rgba(255, 214, 0, .30); }
 /* 深色下正文是浅色字，压在橙色上对比度不足（约 3.3:1），改为深色字压橙底。
    选择器带上 .cm-content 提高优先级，确保盖过 CodeMirror 的语法高亮着色类。 */
 body.dark .cm-content .cm-find-match.cm-find-active { color: #1a1a1a; }
+/* 语法着色会在文字外面再套一层带颜色的 span，它会盖过上面的规则，
+   所以当前项里的所有 span 也一并压成深色字，否则代码块内的浅色 token 仍是浅字压橙底。 */
+body.dark .cm-content .cm-find-match.cm-find-active span { color: #1a1a1a; }
 
 /* 可拖拽分隔条 */
 .divider {
@@ -761,6 +790,58 @@ body[data-style="ink"] .code-wrap {
 }
 .code-wrap pre code,
 .markdown-body .code-wrap pre code { background: transparent; padding: 0; }
+
+/* ---------- 深色模式下的代码高亮配色 ----------
+   项目引入的是 highlight.js 的 github.css（浅色主题）：关键字 #d73a49、属性/数字 #005cc5、
+   字符串 #032f62 都是深色，压在深色代码底（--bg-3）上只有 1.5~2.5:1，正文基本看不清。
+   深色模式下整体换成 GitHub Dark 的配色，各色对深色底的对比度均在 4.5:1 以上。 */
+body.dark .hljs { color: var(--text); background: transparent; }
+body.dark .hljs-doctag,
+body.dark .hljs-keyword,
+body.dark .hljs-meta .hljs-keyword,
+body.dark .hljs-template-tag,
+body.dark .hljs-template-variable,
+body.dark .hljs-type,
+body.dark .hljs-variable.language_ { color: #ff7b72; }
+body.dark .hljs-title,
+body.dark .hljs-title.class_,
+body.dark .hljs-title.class_.inherited__,
+body.dark .hljs-title.function_ { color: #d2a8ff; }
+body.dark .hljs-attr,
+body.dark .hljs-attribute,
+body.dark .hljs-literal,
+body.dark .hljs-meta,
+body.dark .hljs-number,
+body.dark .hljs-operator,
+body.dark .hljs-variable,
+body.dark .hljs-selector-attr,
+body.dark .hljs-selector-class,
+body.dark .hljs-selector-id { color: #79c0ff; }
+body.dark .hljs-regexp,
+body.dark .hljs-string,
+body.dark .hljs-meta .hljs-string,
+body.dark .hljs-section { color: #a5d6ff; }
+body.dark .hljs-built_in,
+body.dark .hljs-symbol,
+body.dark .hljs-bullet { color: #ffa657; }
+body.dark .hljs-comment,
+body.dark .hljs-code,
+body.dark .hljs-formula { color: #a8b3bd; font-style: italic; }
+body.dark .hljs-name,
+body.dark .hljs-quote,
+body.dark .hljs-selector-tag,
+body.dark .hljs-selector-pseudo { color: #7ee787; }
+body.dark .hljs-subst,
+body.dark .hljs-params,
+body.dark .hljs-property,
+body.dark .hljs-punctuation,
+body.dark .hljs-tag,
+body.dark .hljs-char.escape_,
+body.dark .hljs-link { color: var(--text); }
+body.dark .hljs-addition { color: #aff5b4; background-color: rgba(46, 160, 67, .28); }
+body.dark .hljs-deletion { color: #ffdcd7; background-color: rgba(248, 81, 73, .28); }
+body.dark .hljs-emphasis { font-style: italic; }
+body.dark .hljs-strong { font-weight: bold; }
 .markdown-body blockquote {
   border-left: 3px solid var(--accent); margin: .7em 0;
   padding: .3em 0 .3em 14px; color: var(--text-2); background: var(--bg-2);
