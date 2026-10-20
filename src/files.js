@@ -59,6 +59,18 @@ export async function listDirectory(path) {
   return [];
 }
 
+// 在指定目录内新建一个空文件，返回新建文件的完整路径
+export async function createFile(dir, name) {
+  if (isTauri) return await invoke("create_file", { dir, name });
+  throw new Error("当前环境不支持新建文件");
+}
+
+// 在指定目录内新建文件夹
+export async function createDir(dir, name) {
+  if (isTauri) return await invoke("create_dir", { dir, name });
+  throw new Error("当前环境不支持新建文件夹");
+}
+
 // 浏览器环境（vite dev）下的退化方案，仅用于本地预览 UI。
 function fallback(mode) {
   return new Promise((resolve) => {

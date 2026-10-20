@@ -829,6 +829,100 @@ findReplace = setupFindReplace(editor.view, $("find-bar"), {
 applySettings();
 updateMode();
 setView(currentView);
+
+  // ——— 键盘快捷键（全局）：保存 / 打开 / 新建 用 Ctrl，避免与 CodeMirror 冲突 ———
+  window.addEventListener("keydown", (e) => {
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && e.key.toLowerCase() === "s") { e.preventDefault(); menuActions["save"](); }
+    else if (mod && e.key.toLowerCase() === "o") { e.preventDefault(); menuActions["open"](); }
+    else if (mod && e.key.toLowerCase() === "n") { e.preventDefault(); menuActions["new"](); }
+  });
+
+  // ——— 菜单栏动作分发 ———
+  const menuActions = {
+    // 新建：开一个独立的"未命名-N"页签，不再复用/顶替当前页签（否则会沿用上一个文件的名称）
+    "new": () => {
+      const t = createUntitledTab();
+      switchToTab(t);
+      statusSaved.textContent = "就绪";
+      editor.view.focus();
+    },
+    // 打开：同样开一个独立页签，避免内容换了而页签名还留着旧文件
+    "open": async () => {
+      const p = await files.pickOpen();
+      if (!p) return;
+      openFileInTab(p, { record: true, activate: true });
+    },
+    "open-dir": () => $("btn-open-dir").click(),
+    "save": async () => {
+      let p = currentPath;
+      if (!p) p = await files.pickSave();
+      if (!p) return;
+      await saveFile(p);
+    },
+    "save-as": async () => {
+      const p = await files.pickSave();
+      if (!p) return;
+      await saveFile(p);
+    },
+    "undo": () => editor.undo(),
+    "redo": () => editor.redo(),
+    "cut": () => document.execCommand("cut"),
+    "copy": () => document.execCommand("copy"),
+    "paste": () => document.execCommand("paste"),
+    "select-all": () => editor.view.dispatch({ selection: { anchor: 0, head: editor.view.state.doc.length } }),
+    "select-line": () => {
+      const s = editor.view.state.selection.main;
+      const line = editor.view.state.doc.lineAt(s.head);
+      editor.view.dispatch({ selection: { anchor: line.from, head: line.to } });
+      editor.view.focus();
+    },
+    "toggle-sidebar": toggleSidebar,
+    "view-editor": () => setView("editor"),
+    "view-split": () => setView("split"),
+    "view-preview": () => setView("preview"),
+    "style-minimal": () => setStyle("minimal"),
+    "style-mint": () => setStyle("mint"),
+    "style-vibrant": () => setStyle("vibrant"),
+    "style-cyber": () => setStyle("cyber"),
+    "style-classic": () => setStyle("classic"),
+    "style-ink": () => setStyle("ink"),
+    "mode-light": () => setDark(false),
+    "mode-dark": () => setDark(true),
+    "zoom-in": () => zoom(1),
+    "zoom-out": () => zoom(-1),
+    "zoom-reset": () => { settings.fontSize = 14; applySettings(); saveSettings(settings); },
+    "settings": openSettings,
+    "about": openAbout,
+  };
+
+  // 菜单栏点击分发
+  document.getElementById("menubar").addEventListener("click", (e) => {
+    const item = e.target.closest("[data-action]");
+    if (item) {
+      const fn = menuActions[item.dataset.action];
+      if (fn) fn();
+      closeAllMenus();
+      return;
+    }
+    const menu = e.target.closest(".menu");
+    if (menu) {
+      const open = menu.classList.contains("open");
+      closeAllMenus();
+      if (!open) {
+        menu.classList.add("open");
+        if (menu.dataset.menu === "view") updateStyleMenu();
+      }
+    }
+  });
+  // 点击菜单项 / 菜单外区域时关闭下拉
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".menu")) closeAllMenus();
+  });
+  // 关闭所有 .menu.open
+  function closeAllMenus() {
+    document.querySelectorAll(".menu.open").forEach((m) => m.classList.remove("open"));
+  }
 }); // end DOMContentLoaded
 
 // file operations
@@ -857,23 +951,6 @@ async function saveFile(path) {
     console.error(e);
   }
 }
-
-// keyboard shortcuts
-window.addEventListener("keydown", (e) => {
-  const k = e.key.toLowerCase();
-  if ((e.ctrlKey || e.metaKey) && k === "s") {
-    e.preventDefault();
-    menuActions["save"]();
-  }
-  if ((e.ctrlKey || e.metaKey) && k === "o") {
-    e.preventDefault();
-    menuActions["open"]();
-  }
-  if ((e.ctrlKey || e.metaKey) && k === "n") {
-    e.preventDefault();
-    menuActions["new"]();
-  }
-});
 
 // 查找 / 替换快捷键。
 // 用捕获阶段监听，确保在 CodeMirror 自己的 Mod-f / Mod-g / F3 之前拦下，
@@ -965,89 +1042,6 @@ function zoom(delta) {
   settings.fontSize = Math.min(22, Math.max(12, settings.fontSize + delta));
   applySettings();
   saveSettings(settings);
-}
-
-// ---- 菜单栏动作分发 ----
-const menuActions = {
-  // 新建：开一个独立的"未命名-N"页签，不再复用/顶替当前页签（否则会沿用上一个文件的名称）
-  "new": () => {
-    const t = createUntitledTab();
-    switchToTab(t);
-    statusSaved.textContent = "就绪";
-    editor.view.focus();
-  },
-  // 打开：同样开一个独立页签，避免内容换了而页签名还留着旧文件
-  "open": async () => {
-    const p = await files.pickOpen();
-    if (!p) return;
-    openFileInTab(p, { record: true, activate: true });
-  },
-  "open-dir": () => $("btn-open-dir").click(),
-  "save": async () => {
-    let p = currentPath;
-    if (!p) p = await files.pickSave();
-    if (!p) return;
-    await saveFile(p);
-  },
-  "save-as": async () => {
-    const p = await files.pickSave();
-    if (!p) return;
-    await saveFile(p);
-  },
-  "undo": () => editor.undo(),
-  "redo": () => editor.redo(),
-  "cut": () => document.execCommand("cut"),
-  "copy": () => document.execCommand("copy"),
-  "paste": () => document.execCommand("paste"),
-  "select-all": () => editor.view.dispatch({ selection: { anchor: 0, head: editor.view.state.doc.length } }),
-  "select-line": () => {
-    const s = editor.view.state.selection.main;
-    const line = editor.view.state.doc.lineAt(s.head);
-    editor.view.dispatch({ selection: { anchor: line.from, head: line.to } });
-    editor.view.focus();
-  },
-  "toggle-sidebar": toggleSidebar,
-  "view-editor": () => setView("editor"),
-  "view-split": () => setView("split"),
-  "view-preview": () => setView("preview"),
-  "style-minimal": () => setStyle("minimal"),
-  "style-mint": () => setStyle("mint"),
-  "style-vibrant": () => setStyle("vibrant"),
-  "style-cyber": () => setStyle("cyber"),
-  "style-classic": () => setStyle("classic"),
-  "style-ink": () => setStyle("ink"),
-  "mode-light": () => setDark(false),
-  "mode-dark": () => setDark(true),
-  "zoom-in": () => zoom(1),
-  "zoom-out": () => zoom(-1),
-  "zoom-reset": () => { settings.fontSize = 14; applySettings(); saveSettings(settings); },
-  "settings": openSettings,
-  "about": openAbout,
-};
-
-document.getElementById("menubar").addEventListener("click", (e) => {
-  const item = e.target.closest("[data-action]");
-  if (item) {
-    const fn = menuActions[item.dataset.action];
-    if (fn) fn();
-    closeAllMenus();
-    return;
-  }
-  const menu = e.target.closest(".menu");
-  if (menu) {
-    const open = menu.classList.contains("open");
-    closeAllMenus();
-    if (!open) {
-      menu.classList.add("open");
-      if (menu.dataset.menu === "view") updateStyleMenu();
-    }
-  }
-});
-document.addEventListener("click", (e) => {
-  if (!e.target.closest(".menu")) closeAllMenus();
-});
-function closeAllMenus() {
-  document.querySelectorAll(".menu.open").forEach((m) => m.classList.remove("open"));
 }
 
 // ---- 文件树宽度拖拽 ----

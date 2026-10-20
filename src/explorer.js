@@ -103,15 +103,16 @@ function setupFileCtxMenu() {
   els.list.addEventListener("contextmenu", (e) => {
     e.preventDefault(); // 屏蔽原生菜单（含"打印"）
     const li = e.target.closest && e.target.closest("li[data-path]");
-    if (!li) {
-      hideFileCtxMenu();
-      return;
+    if (li) {
+      showFileCtxMenu(
+        { path: li.dataset.path, is_dir: li.dataset.dir === "1" },
+        e.clientX,
+        e.clientY
+      );
+    } else {
+      // 在空白处（含".. 上一级"）右键：在当前目录内新建
+      showListCtxMenu(e.clientX, e.clientY);
     }
-    showFileCtxMenu(
-      { path: li.dataset.path, is_dir: li.dataset.dir === "1" },
-      e.clientX,
-      e.clientY
-    );
   });
 
   document.addEventListener("click", (e) => {
@@ -133,6 +134,12 @@ function showFileCtxMenu(entry, x, y) {
   const menu = els.ctxMenu;
   const items = [];
 
+  // 新建：在文件夹上右键则建在该文件夹内，在文件上右键则建在其同级目录
+  const targetDir = entry.is_dir ? entry.path : currentDir;
+  items.push({ label: "📄 新建文件", action: () => createNew("file", targetDir) });
+  items.push({ label: "📁 新建文件夹", action: () => createNew("dir", targetDir) });
+  items.push({ sep: true });
+
   if (entry.is_dir) {
     items.push({ label: "打开", action: () => loadDir(entry.path) });
   } else {
@@ -144,6 +151,21 @@ function showFileCtxMenu(entry, x, y) {
     });
   }
 
+  renderCtxItems(menu, items, x, y);
+}
+
+// 在文件树空白处右键：直接在当前目录内新建文件 / 文件夹
+function showListCtxMenu(x, y) {
+  const menu = els.ctxMenu;
+  const items = [
+    { label: "📄 新建文件", action: () => createNew("file", currentDir) },
+    { label: "📁 新建文件夹", action: () => createNew("dir", currentDir) },
+  ];
+  renderCtxItems(menu, items, x, y);
+}
+
+function renderCtxItems(menu, items, x, y) {
+  menu.innerHTML = "";
   items.forEach((it) => {
     if (it.sep) {
       const sep = document.createElement("div");
@@ -168,6 +190,30 @@ function showFileCtxMenu(entry, x, y) {
   const r = menu.getBoundingClientRect();
   menu.style.left = Math.max(4, Math.min(x, window.innerWidth - r.width - 4)) + "px";
   menu.style.top = Math.max(4, Math.min(y, window.innerHeight - r.height - 4)) + "px";
+}
+
+// 新建文件 / 文件夹：弹窗输入名称，调用后端创建；文件创建后自动打开
+async function createNew(kind, dir) {
+  const def = kind === "file" ? "未命名.md" : "新建文件夹";
+  const tip = kind === "file" ? "请输入新文件名称：" : "请输入新文件夹名称：";
+  const promptFn = window.prompt ? window.prompt.bind(window) : null;
+  const name = promptFn ? promptFn(tip, def) : def;
+  if (!name) return;
+  const clean = name.trim();
+  if (!clean) return;
+  try {
+    if (kind === "file") {
+      const full = await files.createFile(dir, clean);
+      // 仅当新建在当前目录内时才刷新文件树（建在子目录里交由用户自行展开）
+      if (dir === currentDir) loadDir(currentDir);
+      if (onOpenFile) onOpenFile(full);
+    } else {
+      await files.createDir(dir, clean);
+      if (dir === currentDir) loadDir(currentDir);
+    }
+  } catch (err) {
+    alert(typeof err === "string" ? err : (err && err.message) || "创建失败");
+  }
 }
 
 function hideFileCtxMenu() {

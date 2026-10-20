@@ -76,6 +76,30 @@ fn write_file(path: String, content: String) -> Result<(), String> {
     fs::write(&path, content).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn create_file(dir: String, name: String) -> Result<String, String> {
+    let full = std::path::Path::new(&dir).join(name);
+    if full.exists() {
+        return Err(format!("已存在：{}", full.display()));
+    }
+    if let Some(parent) = full.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+    }
+    fs::write(&full, b"").map_err(|e| e.to_string())?;
+    Ok(full.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn create_dir(dir: String, name: String) -> Result<(), String> {
+    let full = std::path::Path::new(&dir).join(name);
+    if full.exists() {
+        return Err(format!("已存在：{}", full.display()));
+    }
+    fs::create_dir_all(&full).map_err(|e| e.to_string())
+}
+
 /// 取回文件关联启动时传入的待打开路径，并清空（只取一次）
 #[tauri::command]
 fn get_launch_path(state: tauri::State<Mutex<Option<String>>>) -> Option<String> {
@@ -151,7 +175,9 @@ fn main() {
             open_directory,
             list_directory,
             get_launch_path,
-            open_in_new_window
+            open_in_new_window,
+            create_file,
+            create_dir
         ])
         .manage(Mutex::new(None::<String>))
         .setup(|app| {
